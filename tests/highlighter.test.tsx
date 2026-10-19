@@ -166,6 +166,8 @@ describe("Haiku's answer", () => {
 
     expect(readQuotes(answer)).toEqual([{ mark: 'decide', text: 'Ship it?' }])
     expect(readQuotes('Nothing to mark.')).toEqual([])
+    // A quote the length of a reply is not a highlight.
+    expect(readQuotes(JSON.stringify([{ mark: 'key', quote: 'x'.repeat(601) }]))).toEqual([])
   })
 
   test('names a reply the same whatever its spacing', () => {
@@ -283,10 +285,10 @@ describe('after a turn', () => {
     await ui.unmount()
   })
 
-  test('keeps the last 400 replies and drops the oldest', async ($, on) => {
+  test('keeps the last 500 replies and drops the oldest', async ($, on) => {
     const clock = mock.clock(on)
     const old = (at: number) => `${REPLY}\nOld reply ${at}.`
-    mock.store(on, Object.fromEntries(Array.from({ length: 400 }, (_, at) => [`marks:${idOf(old(at))}`, QUOTES])))
+    mock.store(on, Object.fromEntries(Array.from({ length: 500 }, (_, at) => [`marks:${idOf(old(at))}`, QUOTES])))
     on('model.complete', () => ({ value: ANSWERED }))
     on('turn.complete', ($, e) => ({ text: e.answer }))
     on('ui.render', { component: 'AssistantMessage' }, engine)

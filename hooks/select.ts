@@ -36,6 +36,9 @@ Rules:
 Answer with JSON only: an array of {"mark": "decide" | "key" | "warn" | "done", "quote": "..."}, or [] when nothing needs a highlight.`
 
 const MARKS: readonly Mark[] = ['decide', 'key', 'warn', 'done']
+// A quote longer than this is not a highlight but a reply, and it also keeps a
+// saved reply's picks under 8 KB.
+const LONGEST = 600
 
 /** The message the model reads: what the person asked, then the reply. */
 export function ask(request: string, reply: string): string {
@@ -58,7 +61,9 @@ export function readQuotes(answer: string): Quote[] {
   const quotes: Quote[] = []
   for (const item of parsed) {
     const { mark, quote } = fieldsOf(item)
-    if (isMark(mark) && typeof quote === 'string' && quote.trim() !== '') quotes.push({ mark, text: quote })
+    if (isMark(mark) && typeof quote === 'string' && quote.trim() !== '' && quote.length <= LONGEST) {
+      quotes.push({ mark, text: quote })
+    }
   }
 
   return quotes.slice(0, 12)
