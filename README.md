@@ -30,6 +30,18 @@ Answer `y` to add the marketplace, then pick the user scope. Installed at the us
 
 ## How it works
 
+```mermaid
+flowchart TD
+    you([You send a message]) --> main[Main model writes the reply]
+    main -->|shown right away| screen[Reply on screen]
+    main -.->|reply finishes: turn.complete hook| mod
+    subgraph mod [Highlighter mod, which the main model never sees]
+        direction LR
+        pick[Send your message and the reply to Haiku] --> haiku[Haiku picks exact quotes and a color for each] --> save[(Save the picks)] --> paint[Find the quotes and color them]
+    end
+    mod -.->|a few seconds later: ui.render hook| screen
+```
+
 1. When the main model finishes a reply (`turn.complete`), the mod sends your prompt and the reply to Haiku in a separate request, at Haiku's own default effort. It runs on a timer, so the turn is not delayed.
 2. Haiku answers with a JSON list of exact quotes, each tagged `decide`, `key`, `warn` or `done`.
 3. When the reply is drawn (`ui.render` on `AssistantMessage`), the mod finds each quote by its letters and digits alone, so differences in spacing, case, markdown symbols or list numbers do not matter. Lines with a highlight are drawn by the mod; every other line stays normal markdown.
