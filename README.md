@@ -37,7 +37,7 @@ flowchart TD
     main -.->|reply finishes: turn.complete hook| mod
     subgraph mod [Highlighter mod, which the main model never sees]
         direction LR
-        pick[Send your message and the reply to Haiku] --> haiku[Haiku picks exact quotes and a color for each] --> save[(Save the picks)] --> paint[Find the quotes and color them]
+        pick[Send your message and the reply to Haiku] --> haiku[Haiku picks exact quotes and a color for each] --> save[(Save the picks: FIFO, last 500 replies kept)] --> paint[Find the quotes and color them]
     end
     mod -.->|a few seconds later: ui.render hook| screen
 ```
@@ -45,7 +45,13 @@ flowchart TD
 1. When the main model finishes a reply (`turn.complete`), the mod sends your prompt and the reply to Haiku in a separate request, at Haiku's own default effort. It runs on a timer, so the turn is not delayed.
 2. Haiku answers with a JSON list of exact quotes, each tagged `decide`, `key`, `warn` or `done`.
 3. When the reply is drawn (`ui.render` on `AssistantMessage`), the mod finds each quote by its letters and digits alone, so differences in spacing, case, markdown symbols or list numbers do not matter. Lines with a highlight are drawn by the mod; every other line stays normal markdown.
-4. The picks are saved in the mod's store, one small JSON file Claude Code keeps for the mod under `~/.claude/plugins/store/`. When you reopen a chat, each reply is drawn with its saved colors. The store holds the last 400 replies.
+4. The picks are saved in the mod's store, one small JSON file Claude Code keeps for the mod under `~/.claude/plugins/store/`. When you reopen a chat, each reply is drawn with its saved colors.
+
+### Storage
+
+The store is a FIFO queue, 500 replies deep: each new reply's picks go in at the end, and once there are more than 500, the oldest are deleted. The cap is there because Claude Code limits a mod's store to 4 MiB and rewrites the whole file on each save. 500 replies stay under the cap even if every reply had the most picks possible (12 quotes of up to 600 characters each), and take under 200 KB as replies usually run.
+
+Eviction is by age, not by chat. The mod does not record which chat a reply belongs to, so it cannot drop an archived chat's replies as such. It does not need to: archived chats are the old ones, so their replies are the ones that age out. Tracking chats would add code for the same result.
 
 The request goes through the session's own login, the same one the main model uses. No separate API key is needed.
 
@@ -66,7 +72,7 @@ A typical reply is about 1,500 input tokens for Haiku, plus a few hundred tokens
 - Only the final reply of a turn is read, not the text between tool calls.
 - Code blocks and tables are never highlighted.
 - If a Haiku call fails, the reply stays plain, with one notice per session.
-- Replies older than the last 400 show plain.
+- Replies older than the last 500 show plain.
 
 ## Files
 

@@ -19,11 +19,11 @@ const STYLE: Record<Mark, TextProps> = {
 // Each reply's highlights are saved under this prefix in the mod's store, a
 // JSON file Claude Code keeps for the mod, so a reopened chat shows them
 // again. The store is capped at 4 MiB and rewritten whole on each save, so
-// past KEEP replies the oldest go. A reply's picks are at most 12 quotes of a
-// few hundred characters, under 8 KB, so 400 replies stay under the cap at
-// the worst and near 150 KB as replies usually run.
+// past KEEP replies the oldest go. A reply's picks are at most 12 quotes of
+// 600 characters, under 8 KB, so 500 replies stay under the cap at the worst
+// and near 200 KB as replies usually run.
 const SAVED = 'marks:'
-const KEEP = 400
+const KEEP = 500
 
 // A reply shorter than this has nothing to find first.
 const SHORT = 80
