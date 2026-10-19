@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
 const FPS = 24
-const SECONDS = 11
+const SECONDS = 7.5
 const here = resolve(dirname(fileURLToPath(import.meta.url)))
 const frames = join(here, 'frames')
 
@@ -25,7 +25,7 @@ if (!exe) throw new Error(`no chromium under ${root}; run: npx playwright instal
 rmSync(frames, { recursive: true, force: true })
 mkdirSync(frames)
 const browser = await chromium.launch({ executablePath: exe, headless: true, timeout: 60_000 })
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 })
+const page = await browser.newPage({ viewport: { width: 960, height: 680 }, deviceScaleFactor: 1 })
 await page.goto(`file:///${here.replace(/\\/g, '/')}/demo.html?t=0`)
 await page.evaluate(() => document.fonts.ready)
 const count = FPS * SECONDS
