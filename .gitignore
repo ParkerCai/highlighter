@@ -4,3 +4,8 @@
 node_modules/
 .DS_Store
 Thumbs.db
+
+# The demo recorder
+demo/node_modules/
+demo/frames/
+demo/bun.lock
