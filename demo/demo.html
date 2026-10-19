@@ -11,14 +11,14 @@
     --dim: #8a8884;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; background: var(--bg); }
+  html, body { margin: 0; width: 960px; height: 680px; overflow: hidden; background: var(--bg); }
   body {
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     color: var(--text);
     font-size: 23px;
     line-height: 1.5;
   }
-  .chat { position: absolute; left: 0; right: 0; top: 0; bottom: 128px; padding: 36px 72px 0 72px; }
+  .chat { position: absolute; left: 0; right: 0; top: 0; bottom: 112px; padding: 72px 48px 0 48px; }
   .user { display: flex; justify-content: flex-end; }
   .user .bubble { background: var(--bubble); border-radius: 18px; padding: 12px 22px; max-width: 70%; }
   .reply { margin-top: 44px; }
@@ -29,47 +29,47 @@
   .m.decide { padding: 0 4px; margin: 0 -4px; }
 
   .caption {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 128px;
-    padding: 0 72px; display: flex; align-items: center;
+    position: absolute; left: 0; right: 0; bottom: 0; height: 112px;
+    padding: 0 48px; display: flex; align-items: center;
     color: var(--dim); font-size: 21px;
     border-top: 1px solid #2a2a2a; background: #171717;
   }
-  .caption .step { position: absolute; left: 72px; }
-  .legend { display: flex; gap: 28px; align-items: center; }
+  .caption .step { position: absolute; left: 48px; }
+  .legend { display: flex; gap: 22px; align-items: center; }
   .chip.decide { background: #FFE066; color: #111111; padding: 0 8px; border-radius: 3px; font-weight: 700; }
   .chip.key { color: #8DB7ED; font-weight: 600; }
   .chip.warn { color: #DC8D7D; font-weight: 600; }
   .chip.done { color: #8CD6BA; font-weight: 600; }
-  .brand { position: absolute; right: 72px; top: 0; height: 128px; display: flex; align-items: center; color: var(--dim); font-size: 19px; }
+  .brand { position: absolute; left: 48px; top: 22px; color: var(--dim); font-size: 18px; }
 </style>
 </head>
 <body>
+  <div class="brand">highlighter, a Claude Code mod</div>
   <div class="chat">
-    <div class="user fade" data-t="300" id="user"><div class="bubble">Why does the export fail?</div></div>
+    <div class="user fade" data-t="200" id="user"><div class="bubble">Why does the export fail?</div></div>
 
     <div class="reply">
-      <p class="fade" data-t="900">I found why the export fails.</p>
-      <p class="fade" data-t="1500"><span class="m key">The parser stops at the first tab, so every row after it is dropped.</span></p>
-      <p class="fade" data-t="2100"><span class="m warn">Running the old export again overwrites last week's file.</span></p>
-      <p class="fade" data-t="2700"><span class="m done">The fix passes all 42 tests.</span></p>
-      <p class="fade" data-t="3300"><span class="m decide">Which fix do you want?</span></p>
+      <p class="fade" data-t="500">I found why the export fails.</p>
+      <p class="fade" data-t="800"><span class="m key">The parser stops at the first tab, so every row after it is dropped.</span></p>
+      <p class="fade" data-t="1050"><span class="m warn">Running the old export again overwrites last week's file.</span></p>
+      <p class="fade" data-t="1300"><span class="m done">The fix passes all 42 tests.</span></p>
+      <p class="fade" data-t="1550"><span class="m decide">Which fix do you want?</span></p>
       <ol>
-        <li class="fade" data-t="3600"><span class="m decide">Patch the regex: fast, small risk.</span></li>
-        <li class="fade" data-t="3800"><span class="m decide">Rewrite the parser: slow, safe.</span></li>
+        <li class="fade" data-t="1750"><span class="m decide">Patch the regex: fast, small risk.</span></li>
+        <li class="fade" data-t="1900"><span class="m decide">Rewrite the parser: slow, safe.</span></li>
       </ol>
     </div>
   </div>
 
   <div class="caption">
-    <div class="step" data-from="1200" data-to="5400">The reply arrives as usual. The main model knows nothing about highlights.</div>
-    <div class="step" data-from="5400" data-to="8600">A few seconds later, a separate Haiku call picks what to read first.</div>
-    <div class="step legend" data-from="8600" data-to="99999">
+    <div class="step" data-from="700" data-to="2700">The reply arrives as usual. The main model knows nothing about highlights.</div>
+    <div class="step" data-from="2700" data-to="5300">A few seconds later, a separate Haiku call picks what to read first.</div>
+    <div class="step legend" data-from="5300" data-to="99999">
       <span class="chip decide">needs your decision</span>
       <span class="chip key">key result</span>
       <span class="chip warn">warning</span>
       <span class="chip done">done and verified</span>
     </div>
-    <div class="brand">highlighter, a Claude Code mod</div>
   </div>
 
 <script>
@@ -78,7 +78,7 @@
   const TEXT = [0xe6, 0xe4, 0xdf]
   const COLORS = { key: [0x8d, 0xb7, 0xed], warn: [0xdc, 0x8d, 0x7d], done: [0x8c, 0xd6, 0xba] }
   // The order the mod paints: done, key, warn, then decide.
-  const LIT = { done: 6300, key: 6550, warn: 6800, decide: 7100 }
+  const LIT = { done: 3000, key: 3200, warn: 3400, decide: 3650 }
   const FADE = 350
   const LIGHT = 450
   const clamp = (x) => Math.max(0, Math.min(1, x))
