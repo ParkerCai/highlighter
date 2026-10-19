@@ -1,0 +1,6 @@
+{
+  "name": "highlighter",
+  "description": "The highlighter mod for Claude Code: colors what to read first in each reply.",
+  "owner": { "name": "ParkerCai" },
+  "plugins": [{ "name": "highlighter", "source": "./" }]
+}
