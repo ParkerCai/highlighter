@@ -1,8 +1,7 @@
 import type { EngineInterface, ModelCompleteResult, Register, ResolveInput, TextProps } from 'claude-code'
 
-import type { Quote } from '../types'
 import { plan } from './marks'
-import type { Block, Line, Mark, Span } from './marks'
+import type { Block, Line, Mark, Quote, Span } from './marks'
 import { LEGEND, PREVIEW, SAMPLE, SAMPLE_QUOTES } from './preview'
 import { ALIAS, MODEL, SELECT, ask, idOf, isQuotes, readQuotes } from './select'
 
@@ -17,40 +16,21 @@ const STYLE: Record<Mark, TextProps> = {
   done: { color: '#8CD6BA' },
 }
 
-const MARKS = { plugin: 'highlighter', key: 'marks' } as const
-
-// The store keeps each reply's highlights past the session under this prefix,
-// the oldest dropped past KEEP.
+// Each reply's highlights are saved under this prefix in the mod's store, a
+// JSON file Claude Code keeps for the mod, so a reopened chat shows them
+// again. The store is capped at 4 MiB and rewritten whole on each save, so
+// past KEEP replies the oldest go. A reply's picks are at most 12 quotes of a
+// few hundred characters, under 8 KB, so 400 replies stay under the cap at
+// the worst and near 150 KB as replies usually run.
 const SAVED = 'marks:'
 const KEEP = 400
 
 // A reply shorter than this has nothing to find first.
 const SHORT = 80
 
-// The ids of the replies the store holds, read once per load.
-let saved: Promise<Set<string>> | undefined
 let isWarned = false
 // Set once the chosen model turned out to be gone, for the rest of the load.
 let isFallingBack = false
-
-function savedIds($: EngineInterface): Promise<Set<string>> {
-  saved ??= $.store.keys().then(
-    keys => new Set(keys.filter(key => key.startsWith(SAVED)).map(key => key.slice(SAVED.length))),
-    () => new Set<string>(),
-  )
-
-  return saved
-}
-
-/** A reply's highlights: this session's, else those the store kept. */
-async function highlightsOf($: EngineInterface, id: string): Promise<readonly Quote[] | undefined> {
-  const { value } = await $.state.get({ ...MARKS, id })
-  if (value !== undefined) return value
-  if (!(await savedIds($)).has(id)) return undefined
-  const stored = await $.store.get(SAVED + id)
-
-  return isQuotes(stored) ? stored : undefined
-}
 
 function warn($: EngineInterface, text: string): void {
   if (isWarned) return
@@ -87,11 +67,11 @@ const isGone = (result: ModelCompleteResult | undefined) =>
   (!result.isAnswered && result.reason === 'api-error' && (result.error === 'model_not_found' || result.status === 404))
 
 /**
- * Asks the separate model what to highlight in a finished reply and keeps its
- * picks, which draws the reply again wherever it is drawn. A chosen model that
- * is retired or not offered gives way to Claude Code's own Haiku.
+ * Asks the separate model what to highlight in a finished reply: its quotes,
+ * or none when it picked nothing or could not be asked. A chosen model that is
+ * retired or not offered gives way to Claude Code's own Haiku.
  */
-async function select($: EngineInterface, model: string, request: string, reply: string): Promise<void> {
+async function select($: EngineInterface, model: string, request: string, reply: string): Promise<Quote[]> {
   let used = isFallingBack ? ALIAS : model
   let result = await complete($, used, request, reply)
   if (used !== ALIAS && isGone(result)) {
@@ -102,25 +82,32 @@ async function select($: EngineInterface, model: string, request: string, reply:
   }
   if (result === undefined) {
     warn($, `could not ask ${used}`)
-    return
+    return []
   }
   if (!result.isAnswered) {
     if (result.reason === 'api-error') warn($, `${used} failed (${result.error})`)
-    return
+    return []
   }
-  const quotes = readQuotes(result.text)
-  if (quotes.length === 0) return
 
-  const id = idOf(reply)
-  await $.state.set({ ...MARKS, id }, quotes)
+  return readQuotes(result.text)
+}
+
+/** Saves a reply's highlights, and drops the oldest replies' past KEEP. */
+async function save($: EngineInterface, reply: string, quotes: readonly Quote[]): Promise<void> {
   try {
-    await $.store.set(SAVED + id, quotes)
-    ;(await savedIds($)).add(id)
+    await $.store.set(SAVED + idOf(reply), quotes)
     const keys = (await $.store.keys()).filter(key => key.startsWith(SAVED))
     for (const key of keys.slice(0, -KEEP)) await $.store.delete(key)
   } catch {
-    // Kept for this session alone.
+    warn($, 'could not save the highlights')
   }
+}
+
+/** The highlights saved for a reply, if any. */
+async function savedOf($: EngineInterface, reply: string): Promise<readonly Quote[] | undefined> {
+  const saved = await $.store.get(SAVED + idOf(reply)).catch(() => undefined)
+
+  return isQuotes(saved) ? saved : undefined
 }
 
 /** A planned reply's rows, drawn with the elements of the surface `e` names. */
@@ -210,22 +197,30 @@ export const register: Register = (on, options) => {
 
   // Once the session's own model has answered, a separate model reads the
   // reply and picks what to highlight. Nothing is added to the session's
-  // prompt or transcript: the picks live beside it, by the reply's id.
+  // prompt or transcript.
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     const request = requests.get(e.turnId) ?? ''
     requests.delete(e.turnId)
 
     const isReply = e.agentId === undefined && e.reason === 'answer' && e.answer.trim().length >= SHORT
-    // On a timer, so the turn ends now and the reading runs beside it.
-    if (isReply) $.clock.after(0, () => void select($, model, request, e.answer))
+    // On a timer, so the turn ends now and the reading runs beside it. Once
+    // the picks are saved, the replies are drawn again, and the one they
+    // belong to shows them.
+    if (isReply) {
+      $.clock.after(0, async () => {
+        const quotes = await select($, model, request, e.answer)
+        if (quotes.length === 0) return
+        await save($, e.answer, quotes)
+        $.ui.invalidate('ui.render')
+      })
+    }
 
     return result
   })
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    if (e.props.isSummary) return next(e)
-    const quotes = await highlightsOf($, idOf(e.props.text))
+    const quotes = e.props.isSummary ? undefined : await savedOf($, e.props.text)
     const blocks = quotes === undefined ? null : plan(e.props.text, quotes)
     if (blocks === null) return next(e)
 

@@ -4,7 +4,7 @@
  * told about highlights.
  */
 
-import type { Mark, Quote } from '../types'
+import type { Mark, Quote } from './marks'
 
 /**
  * The model that reads each finished reply and picks what to highlight, unless

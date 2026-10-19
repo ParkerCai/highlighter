@@ -45,7 +45,7 @@ flowchart TD
 1. When the main model finishes a reply (`turn.complete`), the mod sends your prompt and the reply to Haiku in a separate request, at Haiku's own default effort. It runs on a timer, so the turn is not delayed.
 2. Haiku answers with a JSON list of exact quotes, each tagged `decide`, `key`, `warn` or `done`.
 3. When the reply is drawn (`ui.render` on `AssistantMessage`), the mod finds each quote by its letters and digits alone, so differences in spacing, case, markdown symbols or list numbers do not matter. Lines with a highlight are drawn by the mod; every other line stays normal markdown.
-4. The picks are kept in session state and in the mod's store for the last 400 replies, so highlights survive a restart.
+4. The picks are saved in the mod's store, one small JSON file Claude Code keeps for the mod under `~/.claude/plugins/store/`. When you reopen a chat, each reply is drawn with its saved colors. The store holds the last 400 replies.
 
 The request goes through the session's own login, the same one the main model uses. No separate API key is needed.
 
@@ -66,6 +66,7 @@ A typical reply is about 1,500 input tokens for Haiku, plus a few hundred tokens
 - Only the final reply of a turn is read, not the text between tool calls.
 - Code blocks and tables are never highlighted.
 - If a Haiku call fails, the reply stays plain, with one notice per session.
+- Replies older than the last 400 show plain.
 
 ## Files
 
@@ -73,12 +74,11 @@ A typical reply is about 1,500 input tokens for Haiku, plus a few hundred tokens
 - `hooks/select.ts`: the prompt Haiku gets, and how its answer is read
 - `hooks/marks.ts`: finds the quotes in a reply and splits it into painted lines
 - `hooks/preview.ts`: the sample reply `/highlight-preview` draws
-- `types/index.d.ts`: the mod's state contract
 - `tests/highlighter.test.tsx`: the tests
 
 ## Develop
 
-The mod needs Claude Code 2.1.295 or later; older builds have no `$.state`. Run the tests and checks from this folder:
+The mod is built and tested on Claude Code 2.1.295. Run the tests and checks from this folder:
 
 ```
 claude plugin test .

@@ -10,9 +10,14 @@
  * itself; every other line stays markdown the surface draws as it always does.
  */
 
-import type { Mark, Quote } from '../types'
+/**
+ * What a highlight means: needs the person's decision (yellow), the key
+ * result (blue), a warning (red), or work done and verified (green).
+ */
+export type Mark = 'decide' | 'key' | 'warn' | 'done'
 
-export type { Mark, Quote }
+/** One part of a reply to highlight, quoted from it, and how. */
+export type Quote = { mark: Mark; text: string }
 
 /** A run of text drawn in one style. */
 export type Span = {

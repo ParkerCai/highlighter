@@ -3,7 +3,7 @@ import type { ModelCompleteResult } from 'claude-code'
 
 import { plan, readLine } from '../hooks/marks'
 import { ALIAS, MODEL, idOf, readQuotes } from '../hooks/select'
-import type { Quote } from '../types'
+import type { Quote } from '../hooks/marks'
 
 const REPLY = [
   'Found it.',
@@ -281,6 +281,34 @@ describe('after a turn', () => {
 
     expect(found.map(text => text.props).find(props => 'color' in props)).toMatchObject(HIGHLIGHT)
     await ui.unmount()
+  })
+
+  test('keeps the last 400 replies and drops the oldest', async ($, on) => {
+    const clock = mock.clock(on)
+    const old = (at: number) => `${REPLY}\nOld reply ${at}.`
+    mock.store(on, Object.fromEntries(Array.from({ length: 400 }, (_, at) => [`marks:${idOf(old(at))}`, QUOTES])))
+    on('model.complete', () => ({ value: ANSWERED }))
+    on('turn.complete', ($, e) => ({ text: e.answer }))
+    on('ui.render', { component: 'AssistantMessage' }, engine)
+
+    await $.turn.complete({ answer: REPLY, durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+    await clock.settle()
+    const isPainted = async (text: string) => {
+      const ui = await $.ui.mount({
+        plugin: 'highlighter',
+        surface: 'desktop',
+        component: 'AssistantMessage',
+        props: { text, isFirstOfReply: true },
+      })
+      const found = await ui.findAll({ type: 'Text', text: /^Which fix do you want\?$/ })
+      await ui.unmount()
+
+      return found.some(text => 'color' in text.props)
+    }
+
+    expect(await isPainted(REPLY)).toBe(true)
+    expect(await isPainted(old(1))).toBe(true)
+    expect(await isPainted(old(0))).toBe(false)
   })
 
   test('leaves subagent turns, interrupted turns and short replies alone', async ($, on) => {
