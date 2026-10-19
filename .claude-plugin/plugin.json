@@ -1,9 +1,8 @@
 {
   "name": "highlighter",
-  "version": "0.9.0",
+  "version": "0.11.0",
   "description": "After each reply, Claude Haiku picks what to highlight: yellow for what needs your decision, blue for the key result, red for warnings, green for verified results. The main model is never told. /highlight-preview shows what each color means.",
   "author": { "name": "ParkerCai" },
-  "types": "./types/index.d.ts",
   "userConfig": {
     "model": {
       "type": "string",

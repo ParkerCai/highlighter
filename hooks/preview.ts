@@ -3,7 +3,7 @@
  * reply with one highlight of each color, as Haiku would pick them.
  */
 
-import type { Mark, Quote } from '../types'
+import type { Mark, Quote } from './marks'
 
 /** The command's name; the person types `/highlight-preview`. */
 export const PREVIEW = 'highlight-preview'
