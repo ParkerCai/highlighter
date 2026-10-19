@@ -13,6 +13,8 @@ After each reply finishes, a separate call to Claude Haiku 5.5 reads it and pick
 
 The main model is never told about highlights. Nothing is added to its system prompt or to the saved transcript, so its behavior does not change.
 
+![A reply arrives plain; a few seconds later its highlights land](demo/demo.gif)
+
 ## Install
 
 In a terminal session of Claude Code (the desktop app's Code tab does not take this command):
@@ -98,3 +100,5 @@ claude --plugin-dir .
 ```
 
 `tsconfig.json` extends the types Claude Code writes to `.claude-plugin/types/` when it loads the mod. After one load, `tsc -p .` type-checks it.
+
+The demo above is `demo/demo.html`, a page that draws the sample reply at any moment in time. `demo/frames.mjs` renders it frame by frame with Playwright's Chromium and writes `demo.mp4` and `demo.gif` with ffmpeg. To render it again, from `demo/`: `bun install`, then `node frames.mjs` (ffmpeg must be on the PATH, or named in `FFMPEG`).
