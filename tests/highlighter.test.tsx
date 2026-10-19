@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { ModelCompleteResult } from 'claude-code'
 
 import { plan, readLine } from '../hooks/marks'
-import { MODEL, idOf, readQuotes } from '../hooks/select'
+import { ALIAS, MODEL, idOf, readQuotes } from '../hooks/select'
 import type { Quote } from '../types'
 
 const REPLY = [
@@ -192,7 +192,9 @@ describe('after a turn', () => {
     await clock.settle()
 
     expect(asked).toHaveLength(1)
-    expect(asked[0]).toMatchObject({ model: MODEL, effort: 'low' })
+    expect(asked[0]).toMatchObject({ model: MODEL })
+    // Haiku thinks at its own default effort.
+    expect(asked[0]?.effort).toBeUndefined()
     expect(asked[0]?.system).toContain('decide: what the reply waits on the person for')
     expect(asked[0]?.prompt).toContain(ASKED)
     expect(asked[0]?.prompt).toContain(REPLY)
@@ -297,6 +299,59 @@ describe('after a turn', () => {
     await clock.settle()
 
     expect(calls).toBe(0)
+  })
+
+  test('asks the model the settings name', { options: { model: 'claude-haiku-9' } }, async ($, on) => {
+    const clock = mock.clock(on)
+    mock.store(on)
+    const models: string[] = []
+    on('model.complete', ($, e) => {
+      models.push(e.model)
+      return { value: ANSWERED }
+    })
+    on('turn.complete', ($, e) => ({ text: e.answer }))
+
+    await $.turn.complete({ answer: REPLY, durationMs: 1, isAborted: false, turnId: 'a', reason: 'answer' })
+    await clock.settle()
+
+    expect(models).toEqual(['claude-haiku-9'])
+  })
+
+  test("falls back to Claude Code's haiku once the chosen model is gone", async ($, on) => {
+    const clock = mock.clock(on)
+    mock.store(on)
+    const models: string[] = []
+    const toasts: string[] = []
+    const gone: ModelCompleteResult = { isAnswered: false, reason: 'api-error', status: 404, error: 'model_not_found', usage: USAGE }
+    on('model.complete', ($, e) => {
+      models.push(e.model)
+      return { value: e.model === MODEL ? gone : ANSWERED }
+    })
+    on('turn.complete', ($, e) => ({ text: e.answer }))
+    on('ui.toast', ($, e) => {
+      toasts.push(e.text)
+      return { value: undefined }
+    })
+    on('ui.render', { component: 'AssistantMessage' }, engine)
+
+    await $.turn.complete({ answer: REPLY, durationMs: 1, isAborted: false, turnId: 'a', reason: 'answer' })
+    await clock.settle()
+    await $.turn.complete({ answer: `${REPLY}\nMore.`, durationMs: 1, isAborted: false, turnId: 'b', reason: 'answer' })
+    await clock.settle()
+
+    // The second reply goes straight to the fallback.
+    expect(models).toEqual([MODEL, ALIAS, ALIAS])
+    expect(toasts).toEqual([`Highlighter: ${MODEL} is not available, so Claude Code's ${ALIAS} model picks the highlights`])
+    const ui = await $.ui.mount({
+      plugin: 'highlighter',
+      surface: 'desktop',
+      component: 'AssistantMessage',
+      props: { text: REPLY, isFirstOfReply: true },
+    })
+    const found = await ui.findAll({ type: 'Text', text: /^Which fix do you want\?$/ })
+
+    expect(found.map(text => text.props).find(props => 'color' in props)).toMatchObject(HIGHLIGHT)
+    await ui.unmount()
   })
 
   test('says once when Haiku fails, and leaves the reply as it was', async ($, on) => {
