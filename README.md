@@ -25,19 +25,29 @@ Answer `y` to add the marketplace, then pick the user scope. Installed at the us
 
 ## Use
 
-- Highlights appear 1 to 3 seconds after a reply finishes.
+- Highlights appear a few seconds after a reply finishes.
 - Run `/highlight-preview` to see what each color means, on a sample reply.
 
 ## How it works
 
-1. When the main model finishes a reply (`turn.complete`), the mod sends your prompt and the reply to `claude-haiku-5-5` at effort `low`. It runs on a timer, so the turn is not delayed.
+1. When the main model finishes a reply (`turn.complete`), the mod sends your prompt and the reply to Haiku in a separate request, at Haiku's own default effort. It runs on a timer, so the turn is not delayed.
 2. Haiku answers with a JSON list of exact quotes, each tagged `decide`, `key`, `warn` or `done`.
 3. When the reply is drawn (`ui.render` on `AssistantMessage`), the mod finds each quote by its letters and digits alone, so differences in spacing, case, markdown symbols or list numbers do not matter. Lines with a highlight are drawn by the mod; every other line stays normal markdown.
 4. The picks are kept in session state and in the mod's store for the last 400 replies, so highlights survive a restart.
 
+The request goes through the session's own login, the same one the main model uses. No separate API key is needed.
+
+## Model
+
+The `model` setting picks the model, `claude-haiku-5-5` by default. Change it with `/config` in a terminal session when a newer Haiku comes out.
+
+Set it to `haiku` to follow Claude Code's own name for its current Haiku. That name moves to a new Haiku on Claude Code's schedule, which can trail a release, so it is not the default.
+
+If the chosen model is retired or not offered, the mod switches to `haiku` by itself and says so once.
+
 ## Cost
 
-A typical reply is about 1,500 input and 200 output tokens for Haiku: roughly $0.0003, or about 3 cents per 100 replies at Haiku 5.5 API prices. On a subscription it counts toward plan usage instead. Replies under 80 characters are skipped.
+A typical reply is about 1,500 input tokens for Haiku, plus a few hundred tokens of thinking and answer: well under a tenth of a cent, or about 5 cents per 100 replies at Haiku 5.5 API prices. On a subscription it counts toward plan usage instead. Replies under 80 characters are skipped.
 
 ## Limits
 

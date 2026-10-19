@@ -4,7 +4,7 @@ import type { Quote } from '../types'
 import { plan } from './marks'
 import type { Block, Line, Mark, Span } from './marks'
 import { LEGEND, PREVIEW, SAMPLE, SAMPLE_QUOTES } from './preview'
-import { MODEL, SELECT, ask, idOf, isQuotes, readQuotes } from './select'
+import { ALIAS, MODEL, SELECT, ask, idOf, isQuotes, readQuotes } from './select'
 
 // Yellow alone is a highlighter, in bold so the dark text on it does not read
 // thin. The other marks only tint the text: soft colors for a dark theme, each
@@ -30,6 +30,8 @@ const SHORT = 80
 // The ids of the replies the store holds, read once per load.
 let saved: Promise<Set<string>> | undefined
 let isWarned = false
+// Set once the chosen model turned out to be gone, for the rest of the load.
+let isFallingBack = false
 
 function savedIds($: EngineInterface): Promise<Set<string>> {
   saved ??= $.store.keys().then(
@@ -57,26 +59,53 @@ function warn($: EngineInterface, text: string): void {
 }
 
 /**
- * Asks the separate model what to highlight in a finished reply and keeps its
- * picks, which draws the reply again wherever it is drawn.
+ * One call to the model, at its own default effort; undefined when the engine
+ * refused to send it (a model it does not offer, say).
  */
-async function select($: EngineInterface, request: string, reply: string): Promise<void> {
-  let result: ModelCompleteResult
+async function complete(
+  $: EngineInterface,
+  model: string,
+  request: string,
+  reply: string,
+): Promise<ModelCompleteResult | undefined> {
   try {
-    result = await $.model.complete({
-      model: MODEL,
+    return await $.model.complete({
+      model,
       system: SELECT,
       prompt: ask(request, reply),
-      effort: 'low',
-      maxTokens: 2000,
+      // Room for the model's thinking as well as its answer.
+      maxTokens: 4000,
       timeoutMs: 30_000,
     })
-  } catch (error) {
-    warn($, `could not ask ${MODEL} (${error instanceof Error ? error.message : String(error)})`)
+  } catch {
+    return undefined
+  }
+}
+
+const isGone = (result: ModelCompleteResult | undefined) =>
+  result === undefined ||
+  (!result.isAnswered && result.reason === 'api-error' && (result.error === 'model_not_found' || result.status === 404))
+
+/**
+ * Asks the separate model what to highlight in a finished reply and keeps its
+ * picks, which draws the reply again wherever it is drawn. A chosen model that
+ * is retired or not offered gives way to Claude Code's own Haiku.
+ */
+async function select($: EngineInterface, model: string, request: string, reply: string): Promise<void> {
+  let used = isFallingBack ? ALIAS : model
+  let result = await complete($, used, request, reply)
+  if (used !== ALIAS && isGone(result)) {
+    isFallingBack = true
+    warn($, `${model} is not available, so Claude Code's ${ALIAS} model picks the highlights`)
+    used = ALIAS
+    result = await complete($, used, request, reply)
+  }
+  if (result === undefined) {
+    warn($, `could not ask ${used}`)
     return
   }
   if (!result.isAnswered) {
-    if (result.reason === 'api-error') warn($, `${MODEL} failed (${result.error})`)
+    if (result.reason === 'api-error') warn($, `${used} failed (${result.error})`)
     return
   }
   const quotes = readQuotes(result.text)
@@ -148,7 +177,9 @@ function rows($: EngineInterface, e: ResolveInput, blocks: readonly Block[]) {
   )
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // The settings may name another model, such as a newer Haiku.
+  const model = typeof options.model === 'string' && options.model.trim() !== '' ? options.model.trim() : MODEL
   // What each running turn was asked, for the model that reads its reply.
   const requests = new Map<string, string>()
 
@@ -187,7 +218,7 @@ export const register: Register = on => {
 
     const isReply = e.agentId === undefined && e.reason === 'answer' && e.answer.trim().length >= SHORT
     // On a timer, so the turn ends now and the reading runs beside it.
-    if (isReply) $.clock.after(0, () => void select($, request, e.answer))
+    if (isReply) $.clock.after(0, () => void select($, model, request, e.answer))
 
     return result
   })
