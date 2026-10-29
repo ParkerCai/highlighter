@@ -13,7 +13,7 @@ After each reply, Claude Haiku picks a few exact quotes and the mod paints them:
 
 Color codes such as `#0066CC` or `rgb(0, 102, 204)` are drawn on their own color, with dark or light text over it. The mod finds them itself, with no model call, so they show as soon as the reply does. Six or eight hex digits and `rgb()` or `rgba()` count; three-digit codes like `#fff` are left alone, as an issue number looks the same.
 
-The main model is never told about highlights.
+The main model is never told about highlights, so its context stays clean.
 
 ![A reply arrives plain; a few seconds later its highlights land](demo/demo.gif)
 
