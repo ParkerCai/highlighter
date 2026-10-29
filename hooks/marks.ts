@@ -73,7 +73,10 @@ const ORDER: readonly Mark[] = ['done', 'key', 'warn', 'decide']
 
 // A color code: six or eight hex digits after a hash (three are left alone,
 // as an issue number looks the same), or rgb() and rgba() with whole numbers.
-const COLOR = /(?<![\w&#])#([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?(?![\w-])|\brgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:[,/]\s*[\d.]+%?\s*)?\)/g
+const COLOR = /(?<![\w&#])#([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?(?![\w-])|\brgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:[,/]\s*[\d.]+%?\s*)?\)/
+// The same for every code in a line. A global regex keeps its position, so
+// this one is only ever handed to matchAll, which works from its own copy.
+const COLORS = new RegExp(COLOR.source, 'g')
 
 const LETTER = /[\p{L}\p{N}]/u
 // A list's numbers are drawn beside its lines, not in them: one a quote copied
@@ -113,7 +116,7 @@ const ESCAPE = /\\([\\`*_{}[\]()#+\-.!|~=?<>])/g
  * Splits a reply into markdown and painted lines, each quote painted where it
  * is found; null when no quote lands on a line that can be painted.
  */
-export function plan(text: string, quotes: readonly Quote[]): Block[] | null {
+export function plan(text: string, quotes: readonly Quote[], isCodes = true): Block[] | null {
   const rows = read(text)
   const stream = streamOf(rows)
   let isPainted = false
@@ -124,7 +127,7 @@ export function plan(text: string, quotes: readonly Quote[]): Block[] | null {
       if (found !== undefined && paint(rows, stream, found, mark)) isPainted = true
     }
   }
-  if (!isPainted && !rows.some(row => row.kind === 'text' && row.hasColor)) return null
+  if (!isPainted && !(isCodes && rows.some(row => row.kind === 'text' && row.hasColor))) return null
 
   const blocks: Block[] = []
   let markdown: string[] = []
@@ -142,9 +145,10 @@ export function plan(text: string, quotes: readonly Quote[]): Block[] | null {
   }
 
   for (const row of rows) {
-    if (row.kind === 'text' && (row.marks.length > 0 || row.hasColor)) {
+    if (row.kind === 'text' && (row.marks.length > 0 || (isCodes && row.hasColor))) {
       flush()
-      blocks.push({ kind: 'line', line: swatched(painted(row.line, row.marks)) })
+      const line = painted(row.line, row.marks)
+      blocks.push({ kind: 'line', line: isCodes ? swatched(line) : line })
     } else if (row.kind === 'blank' && markdown.length === 0) {
       gap()
     } else {
@@ -324,15 +328,10 @@ function painted(line: Line, marks: readonly (Mark | undefined)[]): Line {
   return { ...line, spans }
 }
 
-const hasColor = (text: string) => {
-  COLOR.lastIndex = 0
-
-  return COLOR.test(text)
-}
+const hasColor = (text: string) => COLOR.test(text)
 
 /** The color a code names, as `#RRGGBB`; nothing for an rgb() out of range. */
 export function colorOf(code: string): string | undefined {
-  COLOR.lastIndex = 0
   const m = COLOR.exec(code)
   if (m === null) return undefined
   if (m[1] !== undefined) return `#${m[1].toUpperCase()}`
@@ -347,7 +346,7 @@ function swatched(line: Line): Line {
   const spans: Span[] = []
   for (const span of line.spans) {
     let at = 0
-    for (const m of span.text.matchAll(COLOR)) {
+    for (const m of span.text.matchAll(COLORS)) {
       const swatch = colorOf(m[0])
       if (swatch === undefined) continue
       if (m.index > at) spans.push({ ...span, text: span.text.slice(at, m.index) })

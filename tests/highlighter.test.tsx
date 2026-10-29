@@ -176,6 +176,17 @@ describe('color codes', () => {
     ])
   })
 
+  test('paints every code on a line, a bare hex before an rgb() included', () => {
+    const blocks = plan('Codes like #0066CC and rgb(200, 80, 27) in color, then #12A05E too.', [])
+    const first = blocks?.[0]
+    if (first?.kind !== 'line') throw new Error('not a line')
+    expect(first.line.spans.filter(span => span.swatch).map(span => [span.text, span.swatch])).toEqual([
+      ['#0066CC', '#0066CC'],
+      ['rgb(200, 80, 27)', '#C8501B'],
+      ['#12A05E', '#12A05E'],
+    ])
+  })
+
   test('keeps a code inside a highlight on its own color', () => {
     const blocks = plan(COLORED, [{ mark: 'key', text: 'Use #0066CC for links' }])
     const first = blocks?.[0]
@@ -192,6 +203,23 @@ describe('color codes', () => {
     expect(inkOn('#12A05E')).toBe('#111111')
     expect(inkOn('#0066CC')).toBe('#FFFFFF')
     expect(inkOn('#1C1C1C')).toBe('#FFFFFF')
+  })
+
+  test('leaves codes alone once the setting is off', async ($, on) => {
+    mock.store(on)
+    on('config.set', ($, e) => ({ value: e.value }))
+    on('ui.render', { component: 'AssistantMessage' }, engine)
+
+    expect(plan(COLORED, [], false)).toBeNull()
+    await $.config.set({ key: 'highlighter.colorCodes', value: false, previous: true, provider: { plugin: 'highlighter', tier: 'user' }, origin: { kind: 'composer' } })
+    const ui = await $.ui.mount({
+      plugin: 'highlighter',
+      surface: 'desktop',
+      component: 'AssistantMessage',
+      props: { text: COLORED, isFirstOfReply: true },
+    })
+    expect((await ui.find({ type: 'Text', text: 'engine' }))?.text).toBe('engine')
+    await ui.unmount()
   })
 
   test('draws a code on its color before Haiku answers, on every surface', async ($, on) => {

@@ -1,6 +1,6 @@
 {
   "name": "highlighter",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "After each reply, Claude Haiku picks what to highlight: yellow for what needs your decision, blue for the key result, red for warnings, green for verified results. Color codes such as #0066CC are shown on their own color. The main model is never told. /highlight-preview shows what each color means.",
   "author": { "name": "ParkerCai" },
   "userConfig": {
@@ -16,6 +16,12 @@
       "description": "Which set of colors to draw: auto follows your theme, light or dark picks a set.",
       "default": "auto",
       "options": ["auto", "light", "dark"]
+    },
+    "colorCodes": {
+      "type": "boolean",
+      "title": "Color codes",
+      "description": "Draw color codes such as #0066CC and rgb(0, 102, 204) on their own color.",
+      "default": true
     }
   }
 }

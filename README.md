@@ -11,7 +11,7 @@ After each reply, Claude Haiku picks a few exact quotes and the mod paints them:
 | Red text | `#C8501B` | `#E57F58` | A warning |
 | Green text | `#12A05E` | `#3DBF7E` | Done and verified |
 
-Color codes such as `#0066CC` or `rgb(0, 102, 204)` are drawn on their own color.
+Color codes such as `#0066CC` or `rgb(0, 102, 204)` are drawn on their own color, with dark or light text over it. The mod finds them itself, with no model call, so they show as soon as the reply does. Six or eight hex digits and `rgb()` or `rgba()` count; three-digit codes like `#fff` are left alone, as an issue number looks the same.
 
 The main model is never told about highlights.
 
@@ -31,7 +31,7 @@ Pick the user scope so it also runs in the desktop app.
 
 - Highlights appear a few seconds after a reply finishes.
 - `/highlight-preview` shows what each color means.
-- `/config` has two settings: the model that picks the quotes (`claude-haiku-5-5` by default) and the color set (`auto`, `light` or `dark`).
+- `/config` has three settings: the model that picks the quotes (`claude-haiku-5-5` by default), the color set (`auto`, `light` or `dark`), and whether color codes are drawn (on by default).
 
 ## How it works
 

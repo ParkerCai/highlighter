@@ -22,6 +22,8 @@ export const TINT: Record<Theme, Record<Exclude<Mark, 'decide'>, string>> = {
 let theme: Theme = 'dark'
 // The mod's own `theme` setting when it names one, over what is found.
 let chosen: string | undefined
+// Whether color codes in a reply are drawn on their own color.
+let isCodes = true
 
 const styleOf = (mark: Mark): TextProps => (mark === 'decide' ? { ...DECIDE } : { color: TINT[theme][mark] })
 
@@ -300,6 +302,7 @@ export const register: Register = (on, options) => {
   const requests = new Map<string, string>()
 
   chosen = typeof options.theme === 'string' ? options.theme : undefined
+  isCodes = options.colorCodes !== false
 
   on('session.start', async ($, e, next) => {
     await load($)
@@ -321,6 +324,15 @@ export const register: Register = (on, options) => {
   on('config.set', { key: 'theme' }, async ($, e, next) => {
     const result = await next(e)
     void applyTheme($).catch(() => undefined)
+
+    return result
+  })
+  on('config.set', { key: 'highlighter.colorCodes' }, async ($, e, next) => {
+    const result = await next(e)
+    if (!('deny' in result)) {
+      isCodes = e.value !== false
+      $.ui.invalidate('ui.render')
+    }
 
     return result
   })
@@ -374,7 +386,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AssistantMessage' }, ($, e, next) => {
     if (loading === undefined) void load($)
     // Color codes paint before Haiku answers, and when it picks nothing.
-    const blocks = e.props.isSummary ? null : plan(e.props.text, picks.get(idOf(e.props.text)) ?? [])
+    const blocks = e.props.isSummary ? null : plan(e.props.text, picks.get(idOf(e.props.text)) ?? [], isCodes)
     if (blocks === null) return next(e)
 
     const { Box, Text } = $.ui.resolve(e)
@@ -400,7 +412,7 @@ export const register: Register = (on, options) => {
   // The preview draws in place of the command's output row: the legend, then
   // the sample reply painted as a reply is.
   on('ui.render', { component: 'CommandOutput', props: { command: 'highlight-preview' } }, ($, e, next) => {
-    const blocks = plan(SAMPLE, SAMPLE_QUOTES)
+    const blocks = plan(SAMPLE, SAMPLE_QUOTES, isCodes)
     if (e.props.isErrored || blocks === null) return next(e)
 
     const { Box, Text } = $.ui.resolve(e)
