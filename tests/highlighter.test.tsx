@@ -269,30 +269,37 @@ describe('after a turn', () => {
     await ui.unmount()
   })
 
-  test('keeps the highlights for the next session', async ($, on) => {
-    mock.store(on, { [`marks:${idOf(REPLY)}`]: QUOTES })
+  test('keeps the highlights for the next session, and those an earlier version saved', async ($, on) => {
+    const older = `${REPLY}\nSaved by version 0.11.`
+    mock.store(on, { picks: { [idOf(REPLY)]: QUOTES }, [`marks:${idOf(older)}`]: QUOTES })
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
     on('ui.render', { component: 'AssistantMessage' }, engine)
 
-    const ui = await $.ui.mount({
-      plugin: 'highlighter',
-      surface: 'desktop',
-      component: 'AssistantMessage',
-      props: { text: REPLY, isFirstOfReply: true },
-    })
-    const found = await ui.findAll({ type: 'Text', text: /^Which fix do you want\?$/ })
+    await $.session.start({ cwd: 'C:/work', surface: 'desktop', isInteractive: true })
+    for (const text of [REPLY, older]) {
+      const ui = await $.ui.mount({
+        plugin: 'highlighter',
+        surface: 'desktop',
+        component: 'AssistantMessage',
+        props: { text, isFirstOfReply: true },
+      })
+      const found = await ui.findAll({ type: 'Text', text: /^Which fix do you want\?$/ })
 
-    expect(found.map(text => text.props).find(props => 'color' in props)).toMatchObject(HIGHLIGHT)
-    await ui.unmount()
+      expect(found.map(text => text.props).find(props => 'color' in props)).toMatchObject(HIGHLIGHT)
+      await ui.unmount()
+    }
   })
 
   test('keeps the last 500 replies and drops the oldest', async ($, on) => {
     const clock = mock.clock(on)
     const old = (at: number) => `${REPLY}\nOld reply ${at}.`
-    mock.store(on, Object.fromEntries(Array.from({ length: 500 }, (_, at) => [`marks:${idOf(old(at))}`, QUOTES])))
+    mock.store(on, { picks: Object.fromEntries(Array.from({ length: 500 }, (_, at) => [idOf(old(at)), QUOTES])) })
     on('model.complete', () => ({ value: ANSWERED }))
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
     on('turn.complete', ($, e) => ({ text: e.answer }))
     on('ui.render', { component: 'AssistantMessage' }, engine)
 
+    await $.session.start({ cwd: 'C:/work', surface: 'desktop', isInteractive: true })
     await $.turn.complete({ answer: REPLY, durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
     await clock.settle()
     const isPainted = async (text: string) => {

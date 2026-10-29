@@ -51,7 +51,7 @@ flowchart TD
 
 ### Storage
 
-The store is a FIFO queue, 500 replies deep: each new reply's picks go in at the end, and once there are more than 500, the oldest are deleted. The cap is there because Claude Code limits a mod's store to 4 MiB and rewrites the whole file on each save. 500 replies stay under the cap even if every reply had the most picks possible (12 quotes of up to 600 characters each), and take under 200 KB as replies usually run.
+The store is a FIFO queue, 500 replies deep: each new reply's picks go in at the end, and once there are more than 500, the oldest are deleted. The mod reads the store once when it loads and keeps the picks in memory, because a surface that is kept waiting while a reply is drawn shows its own version of the reply and never comes back for a late answer. The cap is there because Claude Code limits a mod's store to 4 MiB and rewrites the whole file on each save. 500 replies stay under the cap even if every reply had the most picks possible (12 quotes of up to 600 characters each), and take under 200 KB as replies usually run.
 
 Eviction is by age, not by chat. The mod does not record which chat a reply belongs to, so it cannot drop an archived chat's replies as such. It does not need to: archived chats are the old ones, so their replies are the ones that age out. Tracking chats would add code for the same result.
 

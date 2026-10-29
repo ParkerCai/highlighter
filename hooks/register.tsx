@@ -15,18 +15,24 @@ const STYLE: Record<Mark, TextProps> = {
   done: { color: '#8CD6BA' },
 }
 
-// Each reply's highlights are saved under this prefix in the mod's store, a
-// JSON file Claude Code keeps for the mod, so a reopened chat shows them
-// again. The store is capped at 4 MiB and rewritten whole on each save, so
-// past KEEP replies the oldest go. A reply's picks are at most 12 quotes of
-// 600 characters, under 8 KB, so 500 replies stay under the cap at the worst
-// and near 200 KB as replies usually run.
-const SAVED = 'marks:'
+// Every reply's highlights, by the reply's id, are saved together under this
+// key in the mod's store, a JSON file Claude Code keeps for the mod, so a
+// reopened chat shows them again. The store is capped at 4 MiB and rewritten
+// whole on each save, so past KEEP replies the oldest go. A reply's picks are
+// at most 12 quotes of 600 characters, under 8 KB, so 500 replies stay under
+// the cap at the worst and near 200 KB as replies usually run.
+const PICKS = 'picks'
 const KEEP = 500
+// Versions before 0.12 saved each reply under its own key, with this prefix.
+const LEGACY = 'marks:'
 
 // A reply shorter than this has nothing to find first.
 const SHORT = 80
 
+// The saved picks, read once per load. A draw must be answered at once, so it
+// reads this and never the store.
+const picks = new Map<string, readonly Quote[]>()
+let loading: Promise<void> | undefined
 let isWarned = false
 // Set once the chosen model turned out to be gone, for the rest of the load.
 let isFallingBack = false
@@ -35,6 +41,48 @@ function warn($: EngineInterface, text: string): void {
   if (isWarned) return
   isWarned = true
   $.ui.toast(`Highlighter: ${text}`)
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+/** Reads the saved picks into memory, once, and redraws once they are in. */
+function load($: EngineInterface): Promise<void> {
+  loading ??= (async () => {
+    try {
+      const stored = await $.store.get(PICKS)
+      if (isRecord(stored)) {
+        for (const [id, quotes] of Object.entries(stored)) if (isQuotes(quotes)) picks.set(id, quotes)
+      }
+      // Picks an earlier version saved one key per reply move under PICKS.
+      const legacy = (await $.store.keys()).filter(key => key.startsWith(LEGACY))
+      for (const key of legacy) {
+        const quotes = await $.store.get(key)
+        const id = key.slice(LEGACY.length)
+        if (isQuotes(quotes) && !picks.has(id)) picks.set(id, quotes)
+        await $.store.delete(key)
+      }
+      if (legacy.length > 0) await write($)
+    } catch {
+      // The picks of this load alone, then.
+    }
+    $.ui.invalidate('ui.render')
+  })()
+
+  return loading
+}
+
+/** Writes the picks in memory to the store, the oldest dropped past KEEP. */
+async function write($: EngineInterface): Promise<void> {
+  while (picks.size > KEEP) {
+    const oldest = picks.keys().next().value
+    if (oldest === undefined) break
+    picks.delete(oldest)
+  }
+  try {
+    await $.store.set(PICKS, Object.fromEntries(picks))
+  } catch {
+    warn($, 'could not save the highlights')
+  }
 }
 
 /**
@@ -89,24 +137,6 @@ async function select($: EngineInterface, model: string, request: string, reply:
   }
 
   return readQuotes(result.text)
-}
-
-/** Saves a reply's highlights, and drops the oldest replies' past KEEP. */
-async function save($: EngineInterface, reply: string, quotes: readonly Quote[]): Promise<void> {
-  try {
-    await $.store.set(SAVED + idOf(reply), quotes)
-    const keys = (await $.store.keys()).filter(key => key.startsWith(SAVED))
-    for (const key of keys.slice(0, -KEEP)) await $.store.delete(key)
-  } catch {
-    warn($, 'could not save the highlights')
-  }
-}
-
-/** The highlights saved for a reply, if any. */
-async function savedOf($: EngineInterface, reply: string): Promise<readonly Quote[] | undefined> {
-  const saved = await $.store.get(SAVED + idOf(reply)).catch(() => undefined)
-
-  return isQuotes(saved) ? saved : undefined
 }
 
 /** A planned reply's rows, drawn with the elements of the surface `e` names. */
@@ -170,6 +200,7 @@ export const register: Register = (on, options) => {
   const requests = new Map<string, string>()
 
   on('session.start', async ($, e, next) => {
+    await load($)
     try {
       await $.command.register({
         name: PREVIEW,
@@ -204,13 +235,15 @@ export const register: Register = (on, options) => {
 
     const isReply = e.agentId === undefined && e.reason === 'answer' && e.answer.trim().length >= SHORT
     // On a timer, so the turn ends now and the reading runs beside it. Once
-    // the picks are saved, the replies are drawn again, and the one they
-    // belong to shows them.
+    // the picks are in, the replies are drawn again, and the one they belong
+    // to shows them.
     if (isReply) {
       $.clock.after(0, async () => {
         const quotes = await select($, model, request, e.answer)
         if (quotes.length === 0) return
-        await save($, e.answer, quotes)
+        await load($)
+        picks.set(idOf(e.answer), quotes)
+        await write($)
         $.ui.invalidate('ui.render')
       })
     }
@@ -218,8 +251,11 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    const quotes = e.props.isSummary ? undefined : await savedOf($, e.props.text)
+  // Answered at once, from memory: a surface draws its own version of a reply
+  // when a hook keeps it waiting, and does not come back for a late answer.
+  on('ui.render', { component: 'AssistantMessage' }, ($, e, next) => {
+    if (loading === undefined) void load($)
+    const quotes = e.props.isSummary ? undefined : picks.get(idOf(e.props.text))
     const blocks = quotes === undefined ? null : plan(e.props.text, quotes)
     if (blocks === null) return next(e)
 
@@ -245,7 +281,7 @@ export const register: Register = (on, options) => {
 
   // The preview draws in place of the command's output row: the legend, then
   // the sample reply painted as a reply is.
-  on('ui.render', { component: 'CommandOutput', props: { command: 'highlight-preview' } }, async ($, e, next) => {
+  on('ui.render', { component: 'CommandOutput', props: { command: 'highlight-preview' } }, ($, e, next) => {
     const blocks = plan(SAMPLE, SAMPLE_QUOTES)
     if (e.props.isErrored || blocks === null) return next(e)
 
