@@ -6,13 +6,15 @@ import { LEGEND, PREVIEW, SAMPLE, SAMPLE_QUOTES } from './preview'
 import { ALIAS, MODEL, SELECT, ask, idOf, isQuotes, readQuotes } from './select'
 
 // Yellow alone is a highlighter, in bold so the dark text on it does not read
-// thin. The other marks only tint the text: soft colors for a dark theme, each
-// at least 5.9:1 on its background.
+// thin; its own dark text keeps it readable on any theme. The other marks only
+// tint the text, in the person's theme's own colors, so they fit light and
+// dark themes alike and change with a custom theme: the permission accent
+// (blue), error (red) and success (green).
 const STYLE: Record<Mark, TextProps> = {
   decide: { backgroundColor: '#FFE066', color: '#111111', bold: true },
-  key: { color: '#8DB7ED' },
-  warn: { color: '#DC8D7D' },
-  done: { color: '#8CD6BA' },
+  key: { color: 'permission' },
+  warn: { color: 'error' },
+  done: { color: 'success' },
 }
 
 // Every reply's highlights, by the reply's id, are saved together under this
@@ -148,7 +150,7 @@ function rows($: EngineInterface, e: ResolveInput, blocks: readonly Block[]) {
     if (s.bold) style.bold = true
     if (s.italic) style.italic = true
     if (s.strike) style.strikethrough = true
-    if (s.code && !s.mark) style.color = 'permission'
+    if (s.code && !s.mark) style.color = 'ide'
     const text = <Text {...style}>{s.text}</Text>
 
     return s.href ? <Link href={s.href}>{text}</Link> : text
