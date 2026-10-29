@@ -37,9 +37,9 @@
   .caption .step { position: absolute; left: 48px; }
   .legend { display: flex; gap: 22px; align-items: center; }
   .chip.decide { background: #FFE066; color: #111111; padding: 0 8px; border-radius: 3px; font-weight: 700; }
-  .chip.key { color: #8DB7ED; font-weight: 600; }
-  .chip.warn { color: #DC8D7D; font-weight: 600; }
-  .chip.done { color: #8CD6BA; font-weight: 600; }
+  .chip.key { color: #0066CC; font-weight: 600; }
+  .chip.warn { color: #C8501B; font-weight: 600; }
+  .chip.done { color: #12A05E; font-weight: 600; }
   .brand { position: absolute; left: 48px; top: 22px; color: var(--dim); font-size: 18px; }
 </style>
 </head>
@@ -76,7 +76,7 @@
   // Every state is a pure function of the time t in milliseconds, so a frame
   // can be drawn at any t: window.render(t). Without ?t=, the page plays live.
   const TEXT = [0xe6, 0xe4, 0xdf]
-  const COLORS = { key: [0x8d, 0xb7, 0xed], warn: [0xdc, 0x8d, 0x7d], done: [0x8c, 0xd6, 0xba] }
+  const COLORS = { key: [0x00, 0x66, 0xcc], warn: [0xc8, 0x50, 0x1b], done: [0x12, 0xa0, 0x5e] }
   // The order the mod paints: done, key, warn, then decide.
   const LIT = { done: 3000, key: 3200, warn: 3400, decide: 3650 }
   const FADE = 350

@@ -7,14 +7,13 @@ import { ALIAS, MODEL, SELECT, ask, idOf, isQuotes, readQuotes } from './select'
 
 // Yellow alone is a highlighter, in bold so the dark text on it does not read
 // thin; its own dark text keeps it readable on any theme. The other marks only
-// tint the text, in the person's theme's own colors, so they fit light and
-// dark themes alike and change with a custom theme: the permission accent
-// (blue), error (red) and success (green).
+// tint the text. A mod cannot tell which theme is on, so each tint is one
+// color chosen to read on white and on a dark background.
 const STYLE: Record<Mark, TextProps> = {
   decide: { backgroundColor: '#FFE066', color: '#111111', bold: true },
-  key: { color: 'permission' },
-  warn: { color: 'error' },
-  done: { color: 'success' },
+  key: { color: '#0066CC' },
+  warn: { color: '#C8501B' },
+  done: { color: '#12A05E' },
 }
 
 // Every reply's highlights, by the reply's id, are saved together under this

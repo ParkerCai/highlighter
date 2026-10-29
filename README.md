@@ -13,7 +13,7 @@ After each reply finishes, a separate call to Claude Haiku 5.5 reads it and pick
 
 The main model is never told about highlights. Nothing is added to its system prompt or to the saved transcript, so its behavior does not change.
 
-The blue, red and green are your Claude Code theme's own permission, error and success colors, so they fit light and dark themes alike and follow a custom theme. The yellow is fixed, with dark text on it, so it reads on any theme.
+The colors are fixed and read on light and dark themes alike: blue `#0066CC`, vermilion `#C8501B` and green `#12A05E`. The yellow has dark text on it, so it reads on any theme.
 
 ![A reply arrives plain; a few seconds later its highlights land](demo/demo.gif)
 

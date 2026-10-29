@@ -216,9 +216,9 @@ describe('after a turn', () => {
       expect(await styleOf(/^Patch the regex: fast, small risk\.$/)).toMatchObject(HIGHLIGHT)
       expect(await styleOf(/^Rewrite the parser: slow, safe\.$/)).toMatchObject(HIGHLIGHT)
       for (const [text, color] of [
-        [/^The bug is in $/, 'permission'],
-        [/^Deleting the cache drops unsaved drafts\.$/, 'error'],
-        [/^All 42 tests pass\.$/, 'success'],
+        [/^The bug is in $/, '#0066CC'],
+        [/^Deleting the cache drops unsaved drafts\.$/, '#C8501B'],
+        [/^All 42 tests pass\.$/, '#12A05E'],
       ] as const) {
         const style = await styleOf(text)
         expect(style?.color).toBe(color)
@@ -461,12 +461,12 @@ describe('/highlight-preview', () => {
       expect(await styleOf(/^Which fix do you want\?$/)).toMatchObject(HIGHLIGHT)
       expect(await styleOf(/^Rewrite the parser: slow, safe\.$/)).toMatchObject(HIGHLIGHT)
       for (const [text, color] of [
-        [/^key result$/, 'permission'],
-        [/^The parser stops at the first tab/, 'permission'],
-        [/^warning$/, 'error'],
-        [/^Running the old export again/, 'error'],
-        [/^done and verified$/, 'success'],
-        [/^The fix passes all 42 tests\.$/, 'success'],
+        [/^key result$/, '#0066CC'],
+        [/^The parser stops at the first tab/, '#0066CC'],
+        [/^warning$/, '#C8501B'],
+        [/^Running the old export again/, '#C8501B'],
+        [/^done and verified$/, '#12A05E'],
+        [/^The fix passes all 42 tests\.$/, '#12A05E'],
       ] as const) {
         expect((await styleOf(text))?.color).toBe(color)
       }
