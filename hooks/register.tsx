@@ -223,6 +223,18 @@ async function select($: EngineInterface, model: string, request: string, reply:
   return readQuotes(result.text)
 }
 
+/** Dark or light text, whichever reads on the color `#RRGGBB`. */
+export function inkOn(color: string): string {
+  const channel = (at: number) => {
+    const c = parseInt(color.slice(at, at + 2), 16) / 255
+
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5)
+
+  return luminance > 0.18 ? '#111111' : '#FFFFFF'
+}
+
 /** A planned reply's rows, drawn with the elements of the surface `e` names. */
 function rows($: EngineInterface, e: ResolveInput, blocks: readonly Block[]) {
   const { Box, Link, Markdown, Text } = $.ui.resolve(e)
@@ -233,6 +245,10 @@ function rows($: EngineInterface, e: ResolveInput, blocks: readonly Block[]) {
     if (s.italic) style.italic = true
     if (s.strike) style.strikethrough = true
     if (s.code && !s.mark) style.color = 'ide'
+    if (s.swatch !== undefined) {
+      style.backgroundColor = s.swatch
+      style.color = inkOn(s.swatch)
+    }
     const text = <Text {...style}>{s.text}</Text>
 
     return s.href ? <Link href={s.href}>{text}</Link> : text
@@ -357,8 +373,8 @@ export const register: Register = (on, options) => {
   // when a hook keeps it waiting, and does not come back for a late answer.
   on('ui.render', { component: 'AssistantMessage' }, ($, e, next) => {
     if (loading === undefined) void load($)
-    const quotes = e.props.isSummary ? undefined : picks.get(idOf(e.props.text))
-    const blocks = quotes === undefined ? null : plan(e.props.text, quotes)
+    // Color codes paint before Haiku answers, and when it picks nothing.
+    const blocks = e.props.isSummary ? null : plan(e.props.text, picks.get(idOf(e.props.text)) ?? [])
     if (blocks === null) return next(e)
 
     const { Box, Text } = $.ui.resolve(e)

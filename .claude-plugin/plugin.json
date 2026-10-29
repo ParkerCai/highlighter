@@ -1,7 +1,7 @@
 {
   "name": "highlighter",
-  "version": "0.15.0",
-  "description": "After each reply, Claude Haiku picks what to highlight: yellow for what needs your decision, blue for the key result, red for warnings, green for verified results. The main model is never told. /highlight-preview shows what each color means.",
+  "version": "0.16.0",
+  "description": "After each reply, Claude Haiku picks what to highlight: yellow for what needs your decision, blue for the key result, red for warnings, green for verified results. Color codes such as #0066CC are shown on their own color. The main model is never told. /highlight-preview shows what each color means.",
   "author": { "name": "ParkerCai" },
   "userConfig": {
     "model": {

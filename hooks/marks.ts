@@ -8,6 +8,10 @@
  * still lands, and one may run over several lines (a question and its
  * options). A line a highlight touches is read into styled spans the mod draws
  * itself; every other line stays markdown the surface draws as it always does.
+ *
+ * A color code in the text (`#0066CC`, `rgb(0, 102, 204)`) is found by the
+ * mod itself, with no model, and its line is painted too: the code is drawn
+ * on its own color, the way an editor's color highlighter shows it.
  */
 
 /**
@@ -23,6 +27,8 @@ export type Quote = { mark: Mark; text: string }
 export type Span = {
   text: string
   mark?: Mark
+  /** The color this span names, as `#RRGGBB`, drawn as its background. */
+  swatch?: string
   bold?: true
   italic?: true
   strike?: true
@@ -52,7 +58,7 @@ type Style = Omit<Span, 'text'>
  * `plain` but never paint it. A `blank` row separates blocks.
  */
 type Row =
-  | { kind: 'text'; raw: string; line: Line; plain: string; marks: (Mark | undefined)[] }
+  | { kind: 'text'; raw: string; line: Line; plain: string; marks: (Mark | undefined)[]; hasColor: boolean }
   | { kind: 'raw'; raw: string; plain: string }
   | { kind: 'blank'; raw: string }
 
@@ -64,6 +70,10 @@ type Place = { row: number; at: number }
 
 // Painted weakest first, so where two highlights meet the stronger one shows.
 const ORDER: readonly Mark[] = ['done', 'key', 'warn', 'decide']
+
+// A color code: six or eight hex digits after a hash (three are left alone,
+// as an issue number looks the same), or rgb() and rgba() with whole numbers.
+const COLOR = /(?<![\w&#])#([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?(?![\w-])|\brgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:[,/]\s*[\d.]+%?\s*)?\)/g
 
 const LETTER = /[\p{L}\p{N}]/u
 // A list's numbers are drawn beside its lines, not in them: one a quote copied
@@ -114,7 +124,7 @@ export function plan(text: string, quotes: readonly Quote[]): Block[] | null {
       if (found !== undefined && paint(rows, stream, found, mark)) isPainted = true
     }
   }
-  if (!isPainted) return null
+  if (!isPainted && !rows.some(row => row.kind === 'text' && row.hasColor)) return null
 
   const blocks: Block[] = []
   let markdown: string[] = []
@@ -132,9 +142,9 @@ export function plan(text: string, quotes: readonly Quote[]): Block[] | null {
   }
 
   for (const row of rows) {
-    if (row.kind === 'text' && row.marks.length > 0) {
+    if (row.kind === 'text' && (row.marks.length > 0 || row.hasColor)) {
       flush()
-      blocks.push({ kind: 'line', line: painted(row.line, row.marks) })
+      blocks.push({ kind: 'line', line: swatched(painted(row.line, row.marks)) })
     } else if (row.kind === 'blank' && markdown.length === 0) {
       gap()
     } else {
@@ -193,7 +203,8 @@ function read(text: string): Row[] {
       rows.push({ kind: 'raw', raw, plain: '' })
     } else {
       const line = readLine(raw)
-      rows.push({ kind: 'text', raw, line, plain: line.spans.map(span => span.text).join(''), marks: [] })
+      const plain = line.spans.map(span => span.text).join('')
+      rows.push({ kind: 'text', raw, line, plain, marks: [], hasColor: hasColor(plain) })
     }
   }
 
@@ -308,6 +319,42 @@ function painted(line: Line, marks: readonly (Mark | undefined)[]): Line {
       start = i
     }
     at += span.text.length
+  }
+
+  return { ...line, spans }
+}
+
+const hasColor = (text: string) => {
+  COLOR.lastIndex = 0
+
+  return COLOR.test(text)
+}
+
+/** The color a code names, as `#RRGGBB`; nothing for an rgb() out of range. */
+export function colorOf(code: string): string | undefined {
+  COLOR.lastIndex = 0
+  const m = COLOR.exec(code)
+  if (m === null) return undefined
+  if (m[1] !== undefined) return `#${m[1].toUpperCase()}`
+  const parts = [m[2], m[3], m[4]].map(Number)
+  if (parts.some(part => part > 255)) return undefined
+
+  return `#${parts.map(part => part.toString(16).padStart(2, '0').toUpperCase()).join('')}`
+}
+
+/** The line with each color code in its own span, naming its color. */
+function swatched(line: Line): Line {
+  const spans: Span[] = []
+  for (const span of line.spans) {
+    let at = 0
+    for (const m of span.text.matchAll(COLOR)) {
+      const swatch = colorOf(m[0])
+      if (swatch === undefined) continue
+      if (m.index > at) spans.push({ ...span, text: span.text.slice(at, m.index) })
+      spans.push({ ...span, text: m[0], swatch })
+      at = m.index + m[0].length
+    }
+    if (at < span.text.length) spans.push(at === 0 ? span : { ...span, text: span.text.slice(at) })
   }
 
   return { ...line, spans }

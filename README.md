@@ -11,6 +11,8 @@ After each reply finishes, a separate call to Claude Haiku 5.5 reads it and pick
 | Red text | `#C8501B` | `#E57F58` | A warning: a risk, a breaking change, possible data loss, or something that failed |
 | Green text | `#12A05E` | `#3DBF7E` | Done and verified: a fix confirmed, tests passing |
 
+Color codes in a reply, such as `#0066CC` or `rgb(0, 102, 204)`, are drawn on their own color with dark or light text over it, the way an editor's color highlighter shows them. The mod finds them itself, with no model call, so they show as soon as the reply does.
+
 The main model is never told about highlights. Nothing is added to its system prompt or to the saved transcript, so its behavior does not change.
 
 The light set is deep enough to read on white; the dark set is softer. The yellow has dark text on it, so it reads on any theme.
@@ -76,7 +78,8 @@ A typical reply is about 1,500 input tokens for Haiku, plus a few hundred tokens
 ## Limits
 
 - Only the final reply of a turn is read, not the text between tool calls.
-- Code blocks and tables are never highlighted.
+- Code blocks and tables are never highlighted, color codes in them included.
+- A color code is six or eight hex digits after a hash, or rgb() and rgba() with whole numbers. Three-digit codes such as `#fff` are left alone, as an issue number looks the same.
 - If a Haiku call fails, the reply stays plain, with one notice per session.
 - Replies older than the last 500 show plain.
 

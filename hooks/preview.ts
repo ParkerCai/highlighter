@@ -25,6 +25,8 @@ export const SAMPLE = [
   '',
   'The fix passes all 42 tests.',
   '',
+  'The chart keeps its blue, `#0066CC`, and the error rows turn rgb(200, 80, 27).',
+  '',
   'Which fix do you want?',
   '',
   '1. Patch the regex: fast, small risk.',

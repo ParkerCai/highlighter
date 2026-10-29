@@ -1,8 +1,8 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { ModelCompleteResult } from 'claude-code'
 
-import { plan, readLine } from '../hooks/marks'
-import { TINT } from '../hooks/register'
+import { colorOf, plan, readLine } from '../hooks/marks'
+import { TINT, inkOn } from '../hooks/register'
 import { ALIAS, MODEL, idOf, readQuotes } from '../hooks/select'
 import type { Quote } from '../hooks/marks'
 
@@ -139,6 +139,79 @@ describe('plan', () => {
     const reply = 'Run this?\n```\nrm -rf build\n```\nOk to go ahead?'
 
     expect(kinds(reply, [{ mark: 'decide', text: reply }])).toEqual(['line', 'markdown', 'line'])
+  })
+})
+
+describe('color codes', () => {
+  const COLORED = [
+    'Use `#0066CC` for links and rgb(200, 80, 27) for warnings; issue #123 tracks it.',
+    '',
+    'Plain line.',
+    '',
+    '```css',
+    'a { color: #12A05E }',
+    '```',
+  ].join('\n')
+
+  test('reads a code as its color', () => {
+    expect(colorOf('#0066cc')).toBe('#0066CC')
+    expect(colorOf('#0066CC80')).toBe('#0066CC')
+    expect(colorOf('rgb(200, 80, 27)')).toBe('#C8501B')
+    expect(colorOf('rgba(0,102,204,0.5)')).toBe('#0066CC')
+    expect(colorOf('rgb(300, 0, 0)')).toBeUndefined()
+    expect(colorOf('#123')).toBeUndefined()
+  })
+
+  test('paints each code on its color, with no quote at all, and leaves code blocks alone', () => {
+    const blocks = plan(COLORED, [])
+    expect(blocks?.map(block => block.kind)).toEqual(['line', 'gap', 'markdown'])
+    const first = blocks?.[0]
+    if (first?.kind !== 'line') throw new Error('not a line')
+    expect(first.line.spans.map(span => [span.text, span.swatch ?? '-', span.code ? 'code' : '-'])).toEqual([
+      ['Use ', '-', '-'],
+      ['#0066CC', '#0066CC', 'code'],
+      [' for links and ', '-', '-'],
+      ['rgb(200, 80, 27)', '#C8501B', '-'],
+      [' for warnings; issue #123 tracks it.', '-', '-'],
+    ])
+  })
+
+  test('keeps a code inside a highlight on its own color', () => {
+    const blocks = plan(COLORED, [{ mark: 'key', text: 'Use #0066CC for links' }])
+    const first = blocks?.[0]
+    if (first?.kind !== 'line') throw new Error('not a line')
+    expect(first.line.spans.slice(0, 3).map(span => [span.text, span.mark ?? '-', span.swatch ?? '-'])).toEqual([
+      ['Use ', 'key', '-'],
+      ['#0066CC', 'key', '#0066CC'],
+      [' for links', 'key', '-'],
+    ])
+  })
+
+  test('picks dark text on a light color and light text on a dark one', () => {
+    expect(inkOn('#FFE066')).toBe('#111111')
+    expect(inkOn('#12A05E')).toBe('#111111')
+    expect(inkOn('#0066CC')).toBe('#FFFFFF')
+    expect(inkOn('#1C1C1C')).toBe('#FFFFFF')
+  })
+
+  test('draws a code on its color before Haiku answers, on every surface', async ($, on) => {
+    mock.store(on)
+    on('ui.render', { component: 'AssistantMessage' }, engine)
+
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({
+        plugin: 'highlighter',
+        surface,
+        component: 'AssistantMessage',
+        props: { text: COLORED, isFirstOfReply: true },
+      })
+      const found = (await ui.findAll({ type: 'Text', text: /^#0066CC$/ })).map(text => text.props).find(props => 'backgroundColor' in props)
+      expect(found).toMatchObject({ backgroundColor: '#0066CC', color: '#FFFFFF' })
+      const rgb = (await ui.findAll({ type: 'Text', text: /^rgb\(200, 80, 27\)$/ })).map(text => text.props).find(props => 'backgroundColor' in props)
+      expect(rgb).toMatchObject({ backgroundColor: '#C8501B', color: '#111111' })
+      expect((await ui.find({ type: 'Markdown', text: /color: #12A05E/ }))?.type).toBe('Markdown')
+      await ui.unmount()
+    }
   })
 })
 
