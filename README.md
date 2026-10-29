@@ -2,39 +2,36 @@
 
 A Claude Code mod that colors the parts of Claude's replies you should read first.
 
-After each reply finishes, a separate call to Claude Haiku 5.5 reads it and picks a few exact quotes. The mod then paints them on screen:
+After each reply, Claude Haiku picks a few exact quotes and the mod paints them:
 
-| Color | Light theme | Dark theme | Meaning |
+| Color | Light | Dark | Meaning |
 | --- | --- | --- | --- |
-| Yellow highlight, bold | `#FFE066` | `#FFE066` | Claude is waiting on you: a question only you can answer, a choice to make, or a step only you can take |
-| Blue text | `#0066CC` | `#4A9BE8` | The key result: the direct answer, the root cause, or the main finding |
-| Red text | `#C8501B` | `#E57F58` | A warning: a risk, a breaking change, possible data loss, or something that failed |
-| Green text | `#12A05E` | `#3DBF7E` | Done and verified: a fix confirmed, tests passing |
+| Yellow highlight | `#FFE066` | `#FFE066` | Claude is waiting on you |
+| Blue text | `#0066CC` | `#4A9BE8` | The key result |
+| Red text | `#C8501B` | `#E57F58` | A warning |
+| Green text | `#12A05E` | `#3DBF7E` | Done and verified |
 
-Color codes in a reply, such as `#0066CC` or `rgb(0, 102, 204)`, are drawn on their own color with dark or light text over it, the way an editor's color highlighter shows them. The mod finds them itself, with no model call, so they show as soon as the reply does.
+Color codes such as `#0066CC` or `rgb(0, 102, 204)` are drawn on their own color.
 
-The main model is never told about highlights. Nothing is added to its system prompt or to the saved transcript, so its behavior does not change.
-
-The light set is deep enough to read on white; the dark set is softer. The yellow has dark text on it, so it reads on any theme.
-
-The mod picks the set from your Claude Code theme setting. When that is `auto`, as it is in the desktop app, it reads the app's own appearance setting, and when that is `system`, the operating system's light or dark mode. To force a set, open `/config` and set the mod's Highlight colors row to `light` or `dark`.
+The main model is never told about highlights.
 
 ![A reply arrives plain; a few seconds later its highlights land](demo/demo.gif)
 
 ## Install
 
-In a terminal session of Claude Code (the desktop app's Code tab does not take this command):
+In a terminal session of Claude Code:
 
 ```
 /plugin install highlighter --marketplace ParkerCai/highlighter
 ```
 
-Answer `y` to add the marketplace, then pick the user scope. Installed at the user scope, the mod also runs in the desktop app's Code tab sessions.
+Pick the user scope so it also runs in the desktop app.
 
 ## Use
 
 - Highlights appear a few seconds after a reply finishes.
-- Run `/highlight-preview` to see what each color means, on a sample reply.
+- `/highlight-preview` shows what each color means.
+- `/config` has two settings: the model that picks the quotes (`claude-haiku-5-5` by default) and the color set (`auto`, `light` or `dark`).
 
 ## How it works
 
@@ -50,10 +47,10 @@ flowchart TD
     mod -.->|a few seconds later: ui.render hook| screen
 ```
 
-1. When the main model finishes a reply (`turn.complete`), the mod sends your prompt and the reply to Haiku in a separate request, at Haiku's own default effort. It runs on a timer, so the turn is not delayed.
-2. Haiku answers with a JSON list of exact quotes, each tagged `decide`, `key`, `warn` or `done`.
-3. When the reply is drawn (`ui.render` on `AssistantMessage`), the mod finds each quote by its letters and digits alone, so differences in spacing, case, markdown symbols or list numbers do not matter. Lines with a highlight are drawn by the mod; every other line stays normal markdown.
-4. The picks are saved in the mod's store, one small JSON file Claude Code keeps for the mod under `~/.claude/plugins/store/`. When you reopen a chat, each reply is drawn with its saved colors.
+1. When a reply finishes, the mod sends your message and the reply to Haiku in a separate request.
+2. Haiku answers with exact quotes, each tagged `decide`, `key`, `warn` or `done`.
+3. The mod finds each quote in the reply and draws those lines in color. Other lines stay as they are.
+4. Picks are saved in the mod's store, the last 500 replies, so a reopened chat keeps its colors.
 
 ### Storage
 
@@ -77,35 +74,24 @@ A typical reply is about 1,500 input tokens for Haiku, plus a few hundred tokens
 
 ## Limits
 
-- Only the final reply of a turn is read, not the text between tool calls.
-- Code blocks and tables are never highlighted, color codes in them included.
-- A color code is six or eight hex digits after a hash, or rgb() and rgba() with whole numbers. Three-digit codes such as `#fff` are left alone, as an issue number looks the same.
-- If a Haiku call fails, the reply stays plain, with one notice per session.
-- Replies older than the last 500 show plain.
+- Only the final reply of a turn is read.
+- Code blocks and tables are never highlighted.
+- If the Haiku call fails, the reply stays plain.
 
 ## Files
 
 - `hooks/register.tsx`: the hooks: reading each reply, drawing, and the preview command
 - `hooks/select.ts`: the prompt Haiku gets, and how its answer is read
-- `hooks/marks.ts`: finds the quotes in a reply and splits it into painted lines
+- `hooks/marks.ts`: finds the quotes and color codes in a reply and splits it into painted lines
 - `hooks/preview.ts`: the sample reply `/highlight-preview` draws
 - `tests/highlighter.test.tsx`: the tests
 
 ## Develop
 
-The mod is built and tested on Claude Code 2.1.295. Run the tests and checks from this folder:
-
 ```
 claude plugin test .
 claude plugin validate .
-```
-
-To run the mod from this folder while you change it:
-
-```
 claude --plugin-dir .
 ```
 
-`tsconfig.json` extends the types Claude Code writes to `.claude-plugin/types/` when it loads the mod. After one load, `tsc -p .` type-checks it.
-
-The demo above is `demo/demo.html`, a page that draws the sample reply at any moment in time. `demo/frames.mjs` renders it frame by frame with Playwright's Chromium and writes `demo.mp4` and `demo.gif` with ffmpeg. To render it again, from `demo/`: `bun install`, then `node frames.mjs` (ffmpeg must be on the PATH, or named in `FFMPEG`).
+The demo GIF is rendered from `demo/demo.html`: in `demo/`, run `bun install` then `node frames.mjs` (needs ffmpeg).
