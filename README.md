@@ -4,16 +4,18 @@ A Claude Code mod that colors the parts of Claude's replies you should read firs
 
 After each reply finishes, a separate call to Claude Haiku 5.5 reads it and picks a few exact quotes. The mod then paints them on screen:
 
-| Color | Meaning |
-| --- | --- |
-| Yellow highlight, bold | Claude is waiting on you: a question only you can answer, a choice to make, or a step only you can take |
-| Blue text | The key result: the direct answer, the root cause, or the main finding |
-| Red text | A warning: a risk, a breaking change, possible data loss, or something that failed |
-| Green text | Done and verified: a fix confirmed, tests passing |
+| Color | Light theme | Dark theme | Meaning |
+| --- | --- | --- | --- |
+| Yellow highlight, bold | `#FFE066` | `#FFE066` | Claude is waiting on you: a question only you can answer, a choice to make, or a step only you can take |
+| Blue text | `#0066CC` | `#4A9BE8` | The key result: the direct answer, the root cause, or the main finding |
+| Red text | `#C8501B` | `#E57F58` | A warning: a risk, a breaking change, possible data loss, or something that failed |
+| Green text | `#12A05E` | `#3DBF7E` | Done and verified: a fix confirmed, tests passing |
 
 The main model is never told about highlights. Nothing is added to its system prompt or to the saved transcript, so its behavior does not change.
 
-The colors are fixed and read on light and dark themes alike: blue `#0066CC`, vermilion `#C8501B` and green `#12A05E`. The yellow has dark text on it, so it reads on any theme.
+The light set is deep enough to read on white; the dark set is softer. The yellow has dark text on it, so it reads on any theme.
+
+The mod picks the set from your Claude Code theme setting. When that is `auto`, as it is in the desktop app, it reads the app's own appearance setting, and when that is `system`, the operating system's light or dark mode. To force a set, open `/config` and set the mod's Highlight colors row to `light` or `dark`.
 
 ![A reply arrives plain; a few seconds later its highlights land](demo/demo.gif)
 

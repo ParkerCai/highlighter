@@ -1,6 +1,6 @@
 {
   "name": "highlighter",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "After each reply, Claude Haiku picks what to highlight: yellow for what needs your decision, blue for the key result, red for warnings, green for verified results. The main model is never told. /highlight-preview shows what each color means.",
   "author": { "name": "ParkerCai" },
   "userConfig": {
@@ -9,6 +9,13 @@
       "title": "Highlight model",
       "description": "The model that picks the highlights: a model id such as claude-haiku-5-5, or haiku for the model Claude Code currently calls Haiku.",
       "default": "claude-haiku-5-5"
+    },
+    "theme": {
+      "type": "string",
+      "title": "Highlight colors",
+      "description": "Which set of colors to draw: auto follows your theme, light or dark picks a set.",
+      "default": "auto",
+      "options": ["auto", "light", "dark"]
     }
   }
 }

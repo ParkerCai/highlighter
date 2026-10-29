@@ -6,14 +6,97 @@ import { LEGEND, PREVIEW, SAMPLE, SAMPLE_QUOTES } from './preview'
 import { ALIAS, MODEL, SELECT, ask, idOf, isQuotes, readQuotes } from './select'
 
 // Yellow alone is a highlighter, in bold so the dark text on it does not read
-// thin; its own dark text keeps it readable on any theme. The other marks only
-// tint the text. A mod cannot tell which theme is on, so each tint is one
-// color chosen to read on white and on a dark background.
-const STYLE: Record<Mark, TextProps> = {
-  decide: { backgroundColor: '#FFE066', color: '#111111', bold: true },
-  key: { color: '#0066CC' },
-  warn: { color: '#C8501B' },
-  done: { color: '#12A05E' },
+// thin; its own dark text keeps it readable on any theme.
+const DECIDE: TextProps = { backgroundColor: '#FFE066', color: '#111111', bold: true }
+
+export type Theme = 'light' | 'dark'
+
+// The other marks only tint the text, in one set per theme: deep tones that
+// read on white, softer ones on a dark background.
+export const TINT: Record<Theme, Record<Exclude<Mark, 'decide'>, string>> = {
+  light: { key: '#0066CC', warn: '#C8501B', done: '#12A05E' },
+  dark: { key: '#4A9BE8', warn: '#E57F58', done: '#3DBF7E' },
+}
+
+// The theme the colors are drawn for, found when the session starts.
+let theme: Theme = 'dark'
+// The mod's own `theme` setting when it names one, over what is found.
+let chosen: string | undefined
+
+const styleOf = (mark: Mark): TextProps => (mark === 'decide' ? { ...DECIDE } : { color: TINT[theme][mark] })
+
+/** `light` or `dark` from a theme's name, or nothing for `auto` and the rest. */
+function themeNamed(name: unknown): Theme | undefined {
+  if (typeof name !== 'string') return undefined
+  if (name.startsWith('light')) return 'light'
+  if (name.startsWith('dark')) return 'dark'
+
+  return undefined
+}
+
+// Claude Code's own theme setting names the theme, unless it is `auto`. Then
+// the desktop app follows its own appearance setting, and `system` there
+// follows the operating system, so the mod reads those in turn.
+async function findTheme($: EngineInterface): Promise<Theme> {
+  const named = themeNamed(chosen)
+  if (named) return named
+
+  try {
+    const row = (await $.config.list()).find(row => row.key === 'theme')
+    const found = themeNamed(row?.value)
+    if (found) return found
+  } catch {
+    // Not every host lists its settings; the app and the system are next.
+  }
+
+  let appData: string | undefined
+  let home: string | undefined
+  try {
+    appData = await $.env.get('APPDATA')
+    home = await $.env.get('HOME')
+  } catch {
+    // No environment to read: the system check below still runs.
+  }
+  const files = [
+    ...(appData ? [`${appData}/Claude/config.json`] : []),
+    ...(home ? [`${home}/Library/Application Support/Claude/config.json`, `${home}/.config/Claude/config.json`] : []),
+  ]
+  for (const file of files) {
+    try {
+      const config: unknown = JSON.parse(await $.fs.read(file))
+      const found = themeNamed(isRecord(config) ? config.userThemeMode : undefined)
+      if (found) return found
+      break
+    } catch {
+      // Not there: the next place, or the system.
+    }
+  }
+
+  try {
+    if (appData) {
+      const { stdout } = await $.process.run([
+        'reg',
+        'query',
+        'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize',
+        '/v',
+        'AppsUseLightTheme',
+      ])
+
+      return /0x1\b/.test(stdout) ? 'light' : 'dark'
+    }
+    const { exitCode, stdout } = await $.process.run(['defaults', 'read', '-g', 'AppleInterfaceStyle'])
+
+    return exitCode === 0 && stdout.includes('Dark') ? 'dark' : 'light'
+  } catch {
+    return 'dark'
+  }
+}
+
+async function applyTheme($: EngineInterface): Promise<void> {
+  const found = await findTheme($)
+  if (found === theme) return
+  theme = found
+  $.ui.invalidate('ui.render')
 }
 
 // Every reply's highlights, by the reply's id, are saved together under this
@@ -145,7 +228,7 @@ function rows($: EngineInterface, e: ResolveInput, blocks: readonly Block[]) {
   const { Box, Link, Markdown, Text } = $.ui.resolve(e)
 
   const span = (s: Span) => {
-    const style: TextProps = s.mark ? { ...STYLE[s.mark] } : {}
+    const style: TextProps = s.mark ? styleOf(s.mark) : {}
     if (s.bold) style.bold = true
     if (s.italic) style.italic = true
     if (s.strike) style.strikethrough = true
@@ -200,8 +283,11 @@ export const register: Register = (on, options) => {
   // What each running turn was asked, for the model that reads its reply.
   const requests = new Map<string, string>()
 
+  chosen = typeof options.theme === 'string' ? options.theme : undefined
+
   on('session.start', async ($, e, next) => {
     await load($)
+    void applyTheme($).catch(() => undefined)
     try {
       await $.command.register({
         name: PREVIEW,
@@ -213,6 +299,21 @@ export const register: Register = (on, options) => {
     }
 
     return next(e)
+  })
+
+  // A theme change in /config, Claude Code's own or this mod's, recolors.
+  on('config.set', { key: 'theme' }, async ($, e, next) => {
+    const result = await next(e)
+    void applyTheme($).catch(() => undefined)
+
+    return result
+  })
+  on('config.set', { key: 'highlighter.theme' }, async ($, e, next) => {
+    const result = await next(e)
+    if (!('deny' in result)) chosen = typeof e.value === 'string' ? e.value : undefined
+    void applyTheme($).catch(() => undefined)
+
+    return result
   })
 
   // The model reads this one line; the person sees the preview drawn in its place.
@@ -289,7 +390,7 @@ export const register: Register = (on, options) => {
     const { Box, Text } = $.ui.resolve(e)
     const legend = LEGEND.flatMap(([mark, label], at) => [
       ...(at > 0 ? ['   '] : []),
-      <Text {...STYLE[mark]}>{mark === 'decide' ? ` ${label} ` : label}</Text>,
+      <Text {...styleOf(mark)}>{mark === 'decide' ? ` ${label} ` : label}</Text>,
     ])
 
     return (

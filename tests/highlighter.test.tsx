@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { ModelCompleteResult } from 'claude-code'
 
 import { plan, readLine } from '../hooks/marks'
+import { TINT } from '../hooks/register'
 import { ALIAS, MODEL, idOf, readQuotes } from '../hooks/select'
 import type { Quote } from '../hooks/marks'
 
@@ -39,6 +40,10 @@ const HIGHLIGHT = { backgroundColor: '#FFE066', color: '#111111', bold: true }
 const USAGE = { input_tokens: 900, output_tokens: 120, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 const ANSWER = JSON.stringify(QUOTES.map(quote => ({ mark: quote.mark, quote: quote.text })))
 const engine = () => ({ type: 'Text' as const, children: ['engine'] })
+/** Answers `$.config.list()` with Claude Code's theme row set to `name`. */
+const themed = (name: string) => () => ({
+  value: [{ key: 'theme', label: 'Theme', kind: 'choice' as const, value: name, provider: { plugin: 'engine', tier: 'core' as const }, isLocked: false }],
+})
 const ANSWERED: ModelCompleteResult = { isAnswered: true, text: ANSWER, usage: USAGE }
 const FAILED: ModelCompleteResult = { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: USAGE }
 
@@ -180,6 +185,8 @@ describe('after a turn', () => {
   test('asks Haiku about the reply and paints its picks on every surface', async ($, on) => {
     const clock = mock.clock(on)
     mock.store(on)
+    on('config.list', themed('light'))
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
     const asked: { model: string; prompt: string; system?: string; effort?: string }[] = []
     on('model.complete', ($, e) => {
       asked.push({ model: e.model, prompt: e.prompt, system: e.system, effort: e.effort })
@@ -189,6 +196,7 @@ describe('after a turn', () => {
     on('turn.complete', ($, e) => ({ text: e.answer }))
     on('ui.render', { component: 'AssistantMessage' }, engine)
 
+    await $.session.start({ cwd: 'C:/work', surface: 'desktop', isInteractive: true })
     await $.turn.start({ text: ASKED, turnId: 't1' })
     await $.turn.complete({ answer: REPLY, durationMs: 1000, isAborted: false, turnId: 't1', reason: 'answer' })
     await clock.settle()
@@ -419,6 +427,40 @@ describe('after a turn', () => {
   })
 })
 
+describe('theme', () => {
+  test('draws the dark set when the theme is dark, and recolors when it changes', async ($, on) => {
+    mock.store(on)
+    let name = 'dark'
+    on('config.list', () => themed(name)())
+    on('config.set', ($, e) => {
+      name = String(e.value)
+
+      return { value: e.value }
+    })
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('ui.render', { component: 'CommandOutput' }, engine)
+    await $.session.start({ cwd: 'C:/work', surface: 'desktop', isInteractive: true })
+
+    const mount = () =>
+      $.ui.mount({
+        plugin: 'highlighter',
+        surface: 'desktop',
+        component: 'CommandOutput',
+        props: { command: 'highlight-preview', args: '', text: 'Highlight preview', isErrored: false },
+      })
+    let ui = await mount()
+    expect((await ui.find({ type: 'Text', text: /^key result$/ }))?.props.color).toBe(TINT.dark.key)
+    expect((await ui.find({ type: 'Text', text: /^warning$/ }))?.props.color).toBe(TINT.dark.warn)
+    expect((await ui.find({ type: 'Text', text: /^done and verified$/ }))?.props.color).toBe(TINT.dark.done)
+    await ui.unmount()
+
+    await $.config.set({ key: 'theme', value: 'light', previous: name, provider: { plugin: 'engine', tier: 'core' }, origin: { kind: 'composer' } })
+    ui = await mount()
+    expect((await ui.find({ type: 'Text', text: /^key result$/ }))?.props.color).toBe(TINT.light.key)
+    await ui.unmount()
+  })
+})
+
 describe('/highlight-preview', () => {
   test('is registered when the session starts', async ($, on) => {
     const registered: string[] = []
@@ -445,7 +487,11 @@ describe('/highlight-preview', () => {
   })
 
   test('draws the legend and a sample reply in the four colors on every surface', async ($, on) => {
+    mock.store(on)
+    on('config.list', themed('light'))
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
     on('ui.render', { component: 'CommandOutput' }, engine)
+    await $.session.start({ cwd: 'C:/work', surface: 'desktop', isInteractive: true })
 
     for (const surface of SURFACES) {
       const ui = await $.ui.mount({
