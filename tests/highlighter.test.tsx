@@ -1,10 +1,11 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
-import type { ModelCompleteResult } from 'claude-code'
+import type { ModelCompleteResult, SessionMessage } from 'claude-code'
 
 import { colorOf, plan, readLine } from '../hooks/marks'
 import { TINT, inkOn } from '../hooks/register'
 import { ALIAS, MODEL, idOf, readQuotes } from '../hooks/select'
 import type { Quote } from '../hooks/marks'
+import type { Engine } from 'claude-code/testing'
 
 const REPLY = [
   'Found it.',
@@ -573,7 +574,7 @@ describe('/highlight-preview', () => {
 
     await $.session.start({ cwd: 'C:/work', surface: 'desktop', isInteractive: true })
 
-    expect(registered).toEqual(['highlight-preview'])
+    expect(registered).toEqual(['highlight-preview', 'highlight'])
   })
 
   test('leaves the model one short line', async $ => {
@@ -633,5 +634,105 @@ describe('/highlight-preview', () => {
 
     expect((await ui.find({ type: 'Text', text: 'engine' }))?.text).toBe('engine')
     await ui.unmount()
+  })
+})
+
+describe('/highlight', () => {
+  const OLDER = 'Earlier, the build took four minutes because the cache was cold. Warm it with a dry run before you measure again.'
+  const OLDER_ANSWER = JSON.stringify([{ mark: 'key', quote: 'the cache was cold' }])
+  // A chat with two finished turns: a question, a tool call, the answer; then another.
+  const CHAT: SessionMessage[] = [
+    { role: 'user', text: 'Why is the build slow?', toolUses: [] },
+    { role: 'assistant', text: '', toolUses: [{ tool_use_id: 'u1', tool: 'Bash', input: { command: 'bun run build' }, result: 'ok', text: 'ok' }] },
+    { role: 'user', text: '', toolUses: [], toolResults: [{ tool_use_id: 'u1', text: 'ok', isError: false, result: 'ok' }] },
+    { role: 'assistant', text: OLDER, toolUses: [] },
+    { role: 'user', text: ASKED, toolUses: [] },
+    { role: 'assistant', text: REPLY, toolUses: [] },
+  ]
+  const run = ($: Engine, args: string) =>
+    $.command.run({ command: 'highlight', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
+  const isPainted = async ($: Engine, text: string, quote: RegExp) => {
+    const ui = await $.ui.mount({ plugin: 'highlighter', surface: 'desktop', component: 'AssistantMessage', props: { text, isFirstOfReply: true } })
+    const found = (await ui.findAll({ type: 'Text', text: quote })).some(node => 'color' in node.props)
+    await ui.unmount()
+    return found
+  }
+
+  test('reads the last three replies at once, skipping tool calls, and paints their picks', async ($, on) => {
+    mock.store(on)
+    on('session.messages', () => ({ value: CHAT }))
+    const asked: string[] = []
+    on('model.complete', ($, e) => {
+      asked.push(e.prompt)
+      return { value: e.prompt.includes(OLDER) ? { ...ANSWERED, text: OLDER_ANSWER } : ANSWERED }
+    })
+    on('ui.render', { component: 'AssistantMessage' }, engine)
+
+    expect((await run($, '')).text).toBe('Highlighted the last 2 replies.')
+    expect(asked).toHaveLength(2)
+    expect(asked.some(prompt => prompt.includes('Why is the build slow?') && prompt.includes(OLDER))).toBe(true)
+    expect(asked.some(prompt => prompt.includes(ASKED) && prompt.includes(REPLY))).toBe(true)
+    expect(await isPainted($, REPLY, /^Which fix do you want\?$/)).toBe(true)
+    expect(await isPainted($, OLDER, /^the cache was cold\.$/)).toBe(true)
+
+    // A second run asks nothing again.
+    expect((await run($, '')).text).toBe('Already highlighted the last 2 replies.')
+    expect(asked).toHaveLength(2)
+  })
+
+  test('with a number reads that many', async ($, on) => {
+    mock.store(on)
+    on('session.messages', () => ({ value: CHAT }))
+    const asked: string[] = []
+    on('model.complete', ($, e) => {
+      asked.push(e.prompt)
+      return { value: ANSWERED }
+    })
+
+    expect((await run($, '1')).text).toBe('Highlighted the last reply.')
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toContain(REPLY)
+  })
+
+  test('says so when there is no reply, nothing to pick, or a bad count', async ($, on) => {
+    mock.store(on)
+    let chat = CHAT.slice(0, 1)
+    on('session.messages', () => ({ value: chat }))
+    on('model.complete', () => ({ value: { ...ANSWERED, text: '[]' } }))
+
+    expect((await run($, '')).text).toBe('No reply to highlight yet.')
+    chat = CHAT
+    expect((await run($, 'two')).text).toContain('Usage: /highlight [count]')
+    expect((await run($, '0')).text).toContain('Usage: /highlight [count]')
+    expect((await run($, '1')).text).toBe('Nothing to highlight in the last reply.')
+  })
+})
+
+describe('the recent setting', () => {
+  const run = ($: Engine) =>
+    $.command.run({ command: 'highlight', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
+  // Three finished replies, each long enough to read.
+  const reply = (at: number) => `${REPLY}\nReply number ${at}.`
+  const CHAT: SessionMessage[] = [1, 2, 3].flatMap(at => [
+    { role: 'user' as const, text: `Question ${at}?`, toolUses: [] },
+    { role: 'assistant' as const, text: reply(at), toolUses: [] },
+  ])
+
+  test('sets how many replies /highlight reads, and follows a change in /config', { options: { recent: 1 } }, async ($, on) => {
+    mock.store(on)
+    on('config.set', ($, e) => ({ value: e.value }))
+    on('session.messages', () => ({ value: CHAT }))
+    let asked = 0
+    on('model.complete', () => {
+      asked += 1
+      return { value: ANSWERED }
+    })
+
+    expect((await run($)).text).toBe('Highlighted the last reply.')
+    expect(asked).toBe(1)
+
+    await $.config.set({ key: 'highlighter.recent', value: 3, previous: 1, provider: { plugin: 'highlighter', tier: 'user' }, origin: { kind: 'composer' } })
+    expect((await run($)).text).toBe('Highlighted 2 of the last 3 replies.')
+    expect(asked).toBe(3)
   })
 })

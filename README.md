@@ -30,8 +30,9 @@ Pick the user scope so it also runs in the desktop app.
 ## Use
 
 - Highlights appear a few seconds after a reply finishes.
+- `/highlight` reads the last three replies that have no highlights yet, for a chat that ran before the mod was installed. `/highlight 10` reads the last ten.
 - `/highlight-preview` shows what each color means.
-- `/config` has three settings: the model that picks the quotes (`claude-haiku-5-5` by default), the color set (`auto`, `light` or `dark`), and whether color codes are drawn (on by default).
+- `/config` has four settings: the model that picks the quotes (`claude-haiku-5-5` by default), the color set (`auto`, `light` or `dark`), whether color codes are drawn (on by default), and how many replies `/highlight` reads (3 by default).
 
 ## How it works
 
@@ -80,7 +81,7 @@ A typical reply is about 1,500 input tokens for Haiku, plus a few hundred tokens
 
 ## Files
 
-- `hooks/register.tsx`: the hooks: reading each reply, drawing, and the preview command
+- `hooks/register.tsx`: the hooks: reading each reply, drawing, and the two commands
 - `hooks/select.ts`: the prompt Haiku gets, and how its answer is read
 - `hooks/marks.ts`: finds the quotes and color codes in a reply and splits it into painted lines
 - `hooks/preview.ts`: the sample reply `/highlight-preview` draws

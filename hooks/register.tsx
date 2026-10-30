@@ -115,6 +115,16 @@ const LEGACY = 'marks:'
 // A reply shorter than this has nothing to find first.
 const SHORT = 80
 
+// The command that highlights replies already on screen: the last few, or
+// the last N with a number after it.
+const RECENT = 'highlight'
+// How many `/highlight` reads when no number is given: the `recent` setting.
+let recentCount = 3
+
+/** A whole number of replies from a setting's value, or nothing. */
+const countOf = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : undefined
+
 // The saved picks, read once per load. A draw must be answered at once, so it
 // reads this and never the store.
 const picks = new Map<string, readonly Quote[]>()
@@ -225,6 +235,64 @@ async function select($: EngineInterface, model: string, request: string, reply:
   return readQuotes(result.text)
 }
 
+type Reply = { request: string; reply: string }
+
+/**
+ * The last `count` replies of the chat, newest first, each with the message
+ * that asked for it. A reply is an assistant message that ends a turn: text
+ * long enough to read, no tool calls.
+ */
+async function recent($: EngineInterface, count: number): Promise<Reply[]> {
+  const messages = await $.session.messages()
+  const found: Reply[] = []
+  for (let at = messages.length - 1; at >= 0 && found.length < count; at -= 1) {
+    const message = messages[at]
+    if (message?.role !== 'assistant' || message.toolUses.length > 0 || message.text.trim().length < SHORT) continue
+    let request = ''
+    for (let back = at - 1; back >= 0; back -= 1) {
+      const earlier = messages[back]
+      if (earlier?.role === 'user' && earlier.text.trim() !== '') {
+        request = earlier.text
+        break
+      }
+    }
+    found.push({ request, reply: message.text })
+  }
+
+  return found
+}
+
+/**
+ * Highlights the last few replies, or the last N when `args` is a number: the
+ * replies that have no picks yet are read by the model, all at once.
+ */
+async function highlight($: EngineInterface, model: string, args: string): Promise<string> {
+  const arg = args.trim()
+  const count = arg === '' ? recentCount : /^\d+$/.test(arg) ? Number(arg) : 0
+  if (count < 1) return `Usage: /${RECENT} [count], the number of replies to highlight, counted from the last.`
+
+  const replies = await recent($, count)
+  if (replies.length === 0) return 'No reply to highlight yet.'
+  const these = replies.length === 1 ? 'the last reply' : `the last ${replies.length} replies`
+  await load($)
+  const fresh = replies.filter(({ reply }) => !picks.has(idOf(reply)))
+  if (fresh.length === 0) return `Already highlighted ${these}.`
+
+  const picked = await Promise.all(fresh.map(({ request, reply }) => select($, model, request, reply)))
+  let done = 0
+  fresh.forEach(({ reply }, at) => {
+    const quotes = picked[at]
+    if (quotes === undefined || quotes.length === 0) return
+    picks.set(idOf(reply), quotes)
+    done += 1
+  })
+  if (done === 0) return `Nothing to highlight in ${these}.`
+  await write($)
+  $.ui.invalidate('ui.render')
+
+  return done === replies.length ? `Highlighted ${these}.` : `Highlighted ${done} of ${these}.`
+}
+
 /** Dark or light text, whichever reads on the color `#RRGGBB`. */
 export function inkOn(color: string): string {
   const channel = (at: number) => {
@@ -303,6 +371,7 @@ export const register: Register = (on, options) => {
 
   chosen = typeof options.theme === 'string' ? options.theme : undefined
   isCodes = options.colorCodes !== false
+  recentCount = countOf(options.recent) ?? recentCount
 
   on('session.start', async ($, e, next) => {
     await load($)
@@ -313,8 +382,13 @@ export const register: Register = (on, options) => {
         description: 'Show what each highlight color means, on a sample reply',
         immediate: true,
       })
+      await $.command.register({
+        name: RECENT,
+        description: 'Highlight the last 3 replies, or the last N',
+        argumentHint: '[count]',
+      })
     } catch {
-      // The highlights work without the command.
+      // The highlights work without the commands.
     }
 
     return next(e)
@@ -336,6 +410,12 @@ export const register: Register = (on, options) => {
 
     return result
   })
+  on('config.set', { key: 'highlighter.recent' }, async ($, e, next) => {
+    const result = await next(e)
+    if (!('deny' in result)) recentCount = countOf(e.value) ?? 3
+
+    return result
+  })
   on('config.set', { key: 'highlighter.theme' }, async ($, e, next) => {
     const result = await next(e)
     if (!('deny' in result)) chosen = typeof e.value === 'string' ? e.value : undefined
@@ -348,6 +428,10 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'highlight-preview' }, () => ({
     text: 'Highlight preview: yellow needs your decision, blue is the key result, red is a warning, green is done and verified.',
   }))
+
+  // Replies already on screen, read now: a chat that ran without the mod, or
+  // one whose reading failed.
+  on('command.run', { command: RECENT }, async ($, e) => ({ text: await highlight($, model, e.args) }))
 
   on('turn.start', ($, e, next) => {
     requests.set(e.turnId, e.text)

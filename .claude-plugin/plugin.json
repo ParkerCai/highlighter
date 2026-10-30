@@ -1,7 +1,7 @@
 {
   "name": "highlighter",
-  "version": "0.16.1",
-  "description": "After each reply, Claude Haiku picks what to highlight: yellow for what needs your decision, blue for the key result, red for warnings, green for verified results. Color codes such as #0066CC are shown on their own color. The main model is never told. /highlight-preview shows what each color means.",
+  "version": "0.17.0",
+  "description": "After each reply, Claude Haiku picks what to highlight: yellow for what needs your decision, blue for the key result, red for warnings, green for verified results. Color codes such as #0066CC are shown on their own color. The main model is never told. /highlight reads the last replies of a chat that has none; /highlight-preview shows what each color means.",
   "author": { "name": "ParkerCai" },
   "userConfig": {
     "model": {
@@ -22,6 +22,12 @@
       "title": "Color codes",
       "description": "Draw color codes such as #0066CC and rgb(0, 102, 204) on their own color.",
       "default": true
+    },
+    "recent": {
+      "type": "number",
+      "title": "Replies /highlight reads",
+      "description": "How many of the last replies /highlight reads when no number is given.",
+      "default": 3
     }
   }
 }
