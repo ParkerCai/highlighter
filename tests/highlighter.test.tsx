@@ -340,6 +340,50 @@ describe('after a turn', () => {
     }
   })
 
+  test('lays a highlight over code, bold and links without undoing them', async ($, on) => {
+    const quote = 'Start the app with bun run start and check the hotkey warnings in the log.'
+    const yellow = 'Start the app with `bun run start` and check the **hotkey** warnings in the [log](https://x.dev/log). Later, `bun test` runs again.'
+    const tinted = `${yellow}\n\nDone.`
+    mock.store(on, {
+      picks: {
+        [idOf(yellow)]: [{ mark: 'decide', text: quote }],
+        [idOf(tinted)]: [{ mark: 'key', text: quote }],
+      },
+    })
+    on('config.list', themed('light'))
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('ui.render', { component: 'AssistantMessage' }, engine)
+    await $.session.start({ cwd: 'C:/work', surface: 'desktop', isInteractive: true })
+
+    for (const surface of SURFACES) {
+      const mount = (reply: string) =>
+        $.ui.mount({ plugin: 'highlighter', surface, component: 'AssistantMessage', props: { text: reply, isFirstOfReply: true } })
+      const styleIn = async (ui: Awaited<ReturnType<typeof mount>>, text: RegExp) =>
+        (await ui.findAll({ type: 'Text', text })).map(found => found.props).find(props => 'color' in props)
+
+      // Yellow: code stays monospaced on a deeper yellow, bold goes a weight up.
+      let ui = await mount(yellow)
+      expect(await styleIn(ui, /^Start the app with $/)).toMatchObject(HIGHLIGHT)
+      expect(await styleIn(ui, /^bun run start$/)).toMatchObject({ ...HIGHLIGHT, mono: true, backgroundColor: '#F2C230' })
+      expect(await styleIn(ui, /^hotkey$/)).toMatchObject({ ...HIGHLIGHT, weight: 'bold' })
+      expect(await styleIn(ui, /^log$/)).toMatchObject({ ...HIGHLIGHT, underline: true })
+      expect((await ui.findAll({ type: 'Link' })).map(link => link.props.href)).toEqual(['https://x.dev/log'])
+      // Code outside the highlight, on the line the mod draws, is code too.
+      expect(await styleIn(ui, /^bun test$/)).toMatchObject({ color: 'ide', mono: true })
+      expect((await styleIn(ui, /^bun test$/))?.backgroundColor).toBeUndefined()
+      await ui.unmount()
+
+      // A tint: the color changes, the code face, the bold and the link stay.
+      ui = await mount(tinted)
+      const tint = TINT.light.key
+      expect(await styleIn(ui, /^bun run start$/)).toMatchObject({ color: tint, mono: true })
+      expect(await styleIn(ui, /^hotkey$/)).toMatchObject({ color: tint, bold: true })
+      expect(await styleIn(ui, /^log$/)).toMatchObject({ color: tint, underline: true })
+      expect((await ui.findAll({ type: 'Link' })).map(link => link.props.href)).toEqual(['https://x.dev/log'])
+      await ui.unmount()
+    }
+  })
+
   test('draws a reply as the engine does until its highlights arrive', async ($, on) => {
     mock.store(on)
     on('ui.render', { component: 'AssistantMessage' }, engine)
@@ -608,6 +652,10 @@ describe('/highlight-preview', () => {
       expect(await styleOf(/^ needs your decision $/)).toMatchObject(HIGHLIGHT)
       expect(await styleOf(/^Which fix do you want\?$/)).toMatchObject(HIGHLIGHT)
       expect(await styleOf(/^Rewrite the parser: slow, safe\.$/)).toMatchObject(HIGHLIGHT)
+      // The third option shows code, bold and a link under the yellow.
+      expect(await styleOf(/^bun run export --dry$/)).toMatchObject({ ...HIGHLIGHT, mono: true, backgroundColor: '#F2C230' })
+      expect(await styleOf(/^dry run$/)).toMatchObject({ ...HIGHLIGHT, weight: 'bold' })
+      expect(await styleOf(/^docs$/)).toMatchObject({ ...HIGHLIGHT, underline: true })
       for (const [text, color] of [
         [/^key result$/, '#0066CC'],
         [/^The parser stops at the first tab/, '#0066CC'],

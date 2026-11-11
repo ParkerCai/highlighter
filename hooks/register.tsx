@@ -8,6 +8,9 @@ import { ALIAS, MODEL, SELECT, ask, idOf, isQuotes, readQuotes } from './select'
 // Yellow alone is a highlighter, in bold so the dark text on it does not read
 // thin; its own dark text keeps it readable on any theme.
 const DECIDE: TextProps = { backgroundColor: '#FFE066', color: '#111111', bold: true }
+// Inline code inside the yellow sits on a deeper yellow, so it still reads as
+// code where every letter is monospaced already (the terminal).
+const DECIDE_CODE = '#F2C230'
 
 export type Theme = 'light' | 'dark'
 
@@ -310,11 +313,26 @@ function rows($: EngineInterface, e: ResolveInput, blocks: readonly Block[]) {
   const { Box, Link, Markdown, Text } = $.ui.resolve(e)
 
   const span = (s: Span) => {
-    const style: TextProps = s.mark ? styleOf(s.mark) : {}
+    // The text's own styling first, then the highlight laid over it: a
+    // highlight changes the color and leaves the rest as it was.
+    const style: TextProps = {}
     if (s.bold) style.bold = true
     if (s.italic) style.italic = true
     if (s.strike) style.strikethrough = true
-    if (s.code && !s.mark) style.color = 'ide'
+    if (s.code) {
+      style.mono = true
+      style.color = 'ide'
+    }
+    if (s.mark) {
+      Object.assign(style, styleOf(s.mark))
+      if (s.mark === 'decide') {
+        // The yellow is bold throughout, so bold text in it goes a weight up.
+        if (s.bold) style.weight = 'bold'
+        if (s.code) style.backgroundColor = DECIDE_CODE
+      }
+      // A highlight takes a link's color, so an underline says it is one.
+      if (s.href) style.underline = true
+    }
     if (s.swatch !== undefined) {
       style.backgroundColor = s.swatch
       style.color = inkOn(s.swatch)

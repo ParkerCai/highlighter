@@ -31,6 +31,8 @@ export const SAMPLE = [
   '',
   '1. Patch the regex: fast, small risk.',
   '2. Rewrite the parser: slow, safe.',
+  // Code, bold and a link inside a highlight keep their own look.
+  '3. Decide later: run `bun run export --dry` and read the **dry run** notes in the [docs](https://example.com/docs).',
 ].join('\n')
 
 export const SAMPLE_QUOTES: readonly Quote[] = [
@@ -39,6 +41,6 @@ export const SAMPLE_QUOTES: readonly Quote[] = [
   { mark: 'done', text: 'The fix passes all 42 tests.' },
   {
     mark: 'decide',
-    text: 'Which fix do you want?\n\n1. Patch the regex: fast, small risk.\n2. Rewrite the parser: slow, safe.',
+    text: 'Which fix do you want?\n\n1. Patch the regex: fast, small risk.\n2. Rewrite the parser: slow, safe.\n3. Decide later: run `bun run export --dry` and read the **dry run** notes in the docs.',
   },
 ]
