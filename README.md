@@ -71,6 +71,8 @@ The request goes through the session's own login, the same one the main model us
 - **Stores:** the picks for the last 500 replies, on your machine.
 - **Settings:** it watches `/config` changes to recolor, and never blocks or alters one.
 
+The full statement is in [Privacy](PRIVACY.md).
+
 ## Model
 
 The `model` setting picks the model, `claude-haiku-5-5` by default. Change it with `/config` in a terminal session when a newer Haiku comes out.
