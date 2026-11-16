@@ -42,16 +42,22 @@ function themeNamed(name: unknown): Theme | undefined {
 // Claude Code's own theme setting names the theme, unless it is `auto`. Then
 // the desktop app follows its own appearance setting, and `system` there
 // follows the operating system, so the mod reads those in turn.
-async function findTheme($: EngineInterface): Promise<Theme> {
+// A change to Claude Code's theme is heard before it is saved, so its new
+// value comes in as `incoming` and the saved one is not read.
+async function findTheme($: EngineInterface, incoming?: unknown): Promise<Theme> {
   const named = themeNamed(chosen)
   if (named) return named
 
-  try {
-    const row = (await $.config.list()).find(row => row.key === 'theme')
-    const found = themeNamed(row?.value)
-    if (found) return found
-  } catch {
-    // Not every host lists its settings; the app and the system are next.
+  const passed = themeNamed(incoming)
+  if (passed) return passed
+  if (incoming === undefined) {
+    try {
+      const row = (await $.config.list()).find(row => row.key === 'theme')
+      const found = themeNamed(row?.value)
+      if (found) return found
+    } catch {
+      // Not every host lists its settings; the app and the system are next.
+    }
   }
 
   let appData: string | undefined
@@ -97,8 +103,8 @@ async function findTheme($: EngineInterface): Promise<Theme> {
   }
 }
 
-async function applyTheme($: EngineInterface): Promise<void> {
-  const found = await findTheme($)
+async function applyTheme($: EngineInterface, incoming?: unknown): Promise<void> {
+  const found = await findTheme($, incoming)
   if (found === theme) return
   theme = found
   $.ui.invalidate('ui.render')
@@ -413,33 +419,29 @@ export const register: Register = (on, options) => {
   })
 
   // A theme change in /config, Claude Code's own or this mod's, recolors.
-  on('config.set', { key: 'theme' }, async ($, e, next) => {
-    const result = await next(e)
+  // Each hook takes the new value from the change itself and passes the
+  // change on as it came, so the mod never decides whether it is made.
+  on('config.set', { key: 'theme' }, ($, e, next) => {
+    void applyTheme($, e.value).catch(() => undefined)
+
+    return next(e)
+  })
+  on('config.set', { key: 'highlighter.colorCodes' }, ($, e, next) => {
+    isCodes = e.value !== false
+    $.ui.invalidate('ui.render')
+
+    return next(e)
+  })
+  on('config.set', { key: 'highlighter.recent' }, ($, e, next) => {
+    recentCount = countOf(e.value) ?? 3
+
+    return next(e)
+  })
+  on('config.set', { key: 'highlighter.theme' }, ($, e, next) => {
+    chosen = typeof e.value === 'string' ? e.value : undefined
     void applyTheme($).catch(() => undefined)
 
-    return result
-  })
-  on('config.set', { key: 'highlighter.colorCodes' }, async ($, e, next) => {
-    const result = await next(e)
-    if (!('deny' in result)) {
-      isCodes = e.value !== false
-      $.ui.invalidate('ui.render')
-    }
-
-    return result
-  })
-  on('config.set', { key: 'highlighter.recent' }, async ($, e, next) => {
-    const result = await next(e)
-    if (!('deny' in result)) recentCount = countOf(e.value) ?? 3
-
-    return result
-  })
-  on('config.set', { key: 'highlighter.theme' }, async ($, e, next) => {
-    const result = await next(e)
-    if (!('deny' in result)) chosen = typeof e.value === 'string' ? e.value : undefined
-    void applyTheme($).catch(() => undefined)
-
-    return result
+    return next(e)
   })
 
   // The model reads this one line; the person sees the preview drawn in its place.

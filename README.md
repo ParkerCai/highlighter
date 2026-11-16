@@ -104,5 +104,3 @@ claude plugin test .
 claude plugin validate .
 claude --plugin-dir .
 ```
-
-The demo GIF is rendered from `demo/demo.html`: in `demo/`, run `bun install` then `node frames.mjs` (needs ffmpeg).

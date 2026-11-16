@@ -5,8 +5,6 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# The demo recorder
-demo/node_modules/
-demo/frames/
-demo/bun.lock
-demo/demo.mp4
+# The demo recorder stays out of the plugin; only the GIF the README shows ships
+demo/*
+!demo/demo.gif
