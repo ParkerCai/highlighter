@@ -136,7 +136,7 @@ let isWarned = false
 // Set once the chosen model turned out to be gone, for the rest of the load.
 let isFallingBack = false
 
-function warn($: EngineInterface, text: string): void {
+function warnOnce($: EngineInterface, text: string): void {
   if (isWarned) return
   isWarned = true
   $.ui.toast(`Highlighter: ${text}`)
@@ -180,7 +180,7 @@ async function write($: EngineInterface): Promise<void> {
   try {
     await $.store.set(PICKS, Object.fromEntries(picks))
   } catch {
-    warn($, 'could not save the highlights')
+    warnOnce($, 'could not save the highlights')
   }
 }
 
@@ -188,7 +188,7 @@ async function write($: EngineInterface): Promise<void> {
  * One call to the model, at its own default effort; undefined when the engine
  * refused to send it (a model it does not offer, say).
  */
-async function complete(
+async function askModel(
   $: EngineInterface,
   model: string,
   request: string,
@@ -219,19 +219,19 @@ const isGone = (result: ModelCompleteResult | undefined) =>
  */
 async function select($: EngineInterface, model: string, request: string, reply: string): Promise<Quote[]> {
   let used = isFallingBack ? ALIAS : model
-  let result = await complete($, used, request, reply)
+  let result = await askModel($, used, request, reply)
   if (used !== ALIAS && isGone(result)) {
     isFallingBack = true
-    warn($, `${model} is not available, so Claude Code's ${ALIAS} model picks the highlights`)
+    warnOnce($, `${model} is not available, so Claude Code's ${ALIAS} model picks the highlights`)
     used = ALIAS
-    result = await complete($, used, request, reply)
+    result = await askModel($, used, request, reply)
   }
   if (result === undefined) {
-    warn($, `could not ask ${used}`)
+    warnOnce($, `could not ask ${used}`)
     return []
   }
   if (!result.isAnswered) {
-    if (result.reason === 'api-error') warn($, `${used} failed (${result.error})`)
+    if (result.reason === 'api-error') warnOnce($, `${used} failed (${result.error})`)
     return []
   }
 
@@ -245,7 +245,7 @@ type Reply = { request: string; reply: string }
  * that asked for it. A reply is an assistant message that ends a turn: text
  * long enough to read, no tool calls.
  */
-async function recent($: EngineInterface, count: number): Promise<Reply[]> {
+async function lastReplies($: EngineInterface, count: number): Promise<Reply[]> {
   const messages = await $.session.messages()
   const found: Reply[] = []
   for (let at = messages.length - 1; at >= 0 && found.length < count; at -= 1) {
@@ -274,7 +274,7 @@ async function highlight($: EngineInterface, model: string, args: string): Promi
   const count = arg === '' ? recentCount : /^\d+$/.test(arg) ? Number(arg) : 0
   if (count < 1) return `Usage: /${RECENT} [count], the number of replies to highlight, counted from the last.`
 
-  const replies = await recent($, count)
+  const replies = await lastReplies($, count)
   if (replies.length === 0) return 'No reply to highlight yet.'
   const these = replies.length === 1 ? 'the last reply' : `the last ${replies.length} replies`
   await load($)

@@ -63,6 +63,14 @@ Eviction is by age, not by chat. The mod does not record which chat a reply belo
 
 The request goes through the session's own login, the same one the main model uses. No separate API key is needed.
 
+## What it reads, sends and runs
+
+- **Sends:** your message and the reply, to the highlight model, through Claude Code's own model call. Nothing goes anywhere else.
+- **Reads:** for the `auto` color set, Claude Code's `theme` setting and the desktop app's `config.json`.
+- **Runs:** if neither names a theme, one read-only system query: `reg query` on Windows, `defaults read` on macOS.
+- **Stores:** the picks for the last 500 replies, on your machine.
+- **Settings:** it watches `/config` changes to recolor, and never blocks or alters one.
+
 ## Model
 
 The `model` setting picks the model, `claude-haiku-5-5` by default. Change it with `/config` in a terminal session when a newer Haiku comes out.
